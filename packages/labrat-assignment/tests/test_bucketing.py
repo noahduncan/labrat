@@ -12,4 +12,4 @@ def test_bucket_for_changes_bucket_for_different_inputs():
     assert bucket_for("feature flag", 1) != bucket_for("feature flag", 2)
 
 def test_bucket_for_result_is_in_range():
-    assert all(0 <= bucket_for("flag", u) < 100 for u in range(0, 10_000))
+    assert all(0 <= bucket_for("flag", u) < 100 for u in range(10_000))
