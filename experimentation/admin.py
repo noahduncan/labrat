@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import FeatureFlag, Experiment
+from .models import Experiment, FeatureFlag
 
 admin.site.register(FeatureFlag)
 admin.site.register(Experiment)
