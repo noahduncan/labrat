@@ -4,8 +4,14 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "django>=6.1.1",
+    "labrat-assignment"
 ]
 
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+labrat-assignment = { workspace = true }
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
