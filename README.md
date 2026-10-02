@@ -5,12 +5,12 @@ Purpose: To practice python as a web language and think through the experimentat
 ## Planning
 
 Experimentation has decent amount of depth, but here we are going to focus on the primary facets of it:
-1. List of experiments / feature flags
-2. Assignment algorithm
-3. Basic code interface (check if flag is on)
-4. Exposure log
-5. Action log
-6. Reporting
+1. [x] List of experiments / feature flags
+2. [x] Assignment algorithm
+3. [ ] Basic code interface (check if flag is on)
+4. [ ] Exposure log
+5. [ ] Action log
+6. [ ] Reporting / significance testing
 
 ### Experiment / feature flag definitions
 * Feature Flags
