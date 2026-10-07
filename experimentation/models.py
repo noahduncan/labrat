@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from django.db import models
 
 
@@ -12,8 +13,8 @@ class Experiment(models.Model):
     feature_flag = models.ForeignKey(FeatureFlag, on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     prediction = models.TextField()
-    split1 = models.IntegerField(default=50)
-    split2 = models.IntegerField(default=50)
+    split_a = models.IntegerField(default=50)
+    split_b = models.IntegerField(default=50)
     start_at = models.DateTimeField()
     end_at = models.DateTimeField()
 
