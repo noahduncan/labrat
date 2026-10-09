@@ -1,6 +1,7 @@
 from datetime import timedelta
 from itertools import count
 
+from django.core.exceptions import ValidationError
 from django.test.testcases import TestCase
 from django.utils import timezone
 
@@ -40,3 +41,86 @@ class ExperimentTest(TestCase):
         e.name = "super test experiment"
         e.save()
         self.assertEqual(e.slug, "test-experiment")
+
+    def test_experiment_cannot_overlap_another_fully_within(self):
+        make_experiment(
+            start_at=self.now,
+            end_at=self.now + timedelta(days=3),
+            feature_flag=self.feature_flag,
+        )
+        with self.assertRaises(ValidationError):
+            make_experiment(
+                start_at=self.now + timedelta(days=1),
+                end_at=self.now + timedelta(days=2),
+                feature_flag=self.feature_flag,
+            )
+
+    def test_experiments_with_different_flags_can_overlap_dates(self):
+        FeatureFlag.objects.create(name="secondary test_flag")
+
+        make_experiment(
+            start_at=self.now,
+            end_at=self.now + timedelta(days=3),
+        )
+        make_experiment(
+            start_at=self.now + timedelta(days=1),
+            end_at=self.now + timedelta(days=2),
+        )
+
+        self.assertEqual(Experiment.objects.count(), 2)
+
+    def test_experiment_cannot_overlap_another_partial(self):
+        make_experiment(
+            start_at=self.now,
+            end_at=self.now + timedelta(days=2),
+            feature_flag=self.feature_flag,
+        )
+        with self.assertRaises(ValidationError):
+            make_experiment(
+                start_at=self.now + timedelta(days=1),
+                end_at=self.now + timedelta(days=2),
+                feature_flag=self.feature_flag,
+            )
+
+    def test_experiment_can_abut_times(self):
+        abutting_time = self.now + timedelta(days=2)
+        make_experiment(
+            start_at=self.now,
+            end_at=abutting_time,
+            feature_flag=self.feature_flag,
+        )
+        make_experiment(
+            start_at=abutting_time,
+            end_at=abutting_time + timedelta(days=1),
+            feature_flag=self.feature_flag,
+        )
+
+        self.assertEqual(Experiment.objects.count(), 2)
+
+    def test_experiment_error_if_splits_do_not_sum_to_100(self):
+        with self.assertRaises(ValidationError) as cm:
+            make_experiment(
+                split_a=40,
+                split_b=40,
+            )
+
+        self.assertTrue("must sum to 100" in cm.exception.messages[0])
+
+    def test_experiment_error_if_split_a_lte_0(self):
+        with self.assertRaises(ValidationError) as cm:
+            make_experiment(
+                split_a=-10,
+                split_b=110,
+            )
+
+        self.assertTrue("'split_a' must be greater than 0" in cm.exception.messages[0])
+
+    def test_experiment_error_if_split_b_lte_0(self):
+        with self.assertRaises(ValidationError) as cm:
+            make_experiment(
+                split_a=110,
+                split_b=-10,
+            )
+
+        self.assertTrue("'split_b' must be greater than 0" in cm.exception.messages[0])
+
