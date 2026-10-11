@@ -10,6 +10,7 @@ from .services.config import snapshot
 
 _counter = count(1)
 
+
 def make_experiment(**overrides):
     now = timezone.now()
     fields = {
@@ -22,9 +23,12 @@ def make_experiment(**overrides):
         **overrides,
     }
     if "feature_flag" not in fields:
-        fields["feature_flag"] = FeatureFlag.objects.create(name="test feature flag" + str(next(_counter)))
+        fields["feature_flag"] = FeatureFlag.objects.create(
+            name="test feature flag" + str(next(_counter))
+        )
 
     return Experiment.objects.create(**fields)
+
 
 class ConfigTest(TestCase):
     def setUp(self):
@@ -32,7 +36,10 @@ class ConfigTest(TestCase):
         self.now = datetime(2026, 10, 8, 0, tzinfo=UTC)
 
     def test_config_flag_with_no_experiments(self):
-        self.assertEqual(snapshot(self.now), {"flags": {"test flag": {"enabled": False, "experiments": []}}})
+        self.assertEqual(
+            snapshot(self.now),
+            {"flags": {"test flag": {"enabled": False, "experiments": []}}},
+        )
 
     def test_config_flag_with_ended_experiment(self):
         make_experiment(
@@ -41,7 +48,9 @@ class ConfigTest(TestCase):
             feature_flag=self.feature_flag,
         )
 
-        self.assertEqual(len(snapshot(self.now)["flags"]["test flag"]["experiments"]), 0)
+        self.assertEqual(
+            len(snapshot(self.now)["flags"]["test flag"]["experiments"]), 0
+        )
 
     def test_config_flag_with_unended_experiment(self):
         make_experiment(
@@ -51,7 +60,13 @@ class ConfigTest(TestCase):
             feature_flag=self.feature_flag,
         )
 
-        self.assertIn("test-experiment", [e["slug"] for e in snapshot(self.now)["flags"]["test flag"]["experiments"]])
+        self.assertIn(
+            "test-experiment",
+            [
+                e["slug"]
+                for e in snapshot(self.now)["flags"]["test flag"]["experiments"]
+            ],
+        )
 
     def test_config_payload_structure(self):
         make_experiment(
@@ -93,7 +108,13 @@ class ConfigTest(TestCase):
             feature_flag=self.feature_flag,
         )
 
-        self.assertIn("test-experiment", [e["slug"] for e in snapshot(self.now)["flags"]["test flag"]["experiments"]])
+        self.assertIn(
+            "test-experiment",
+            [
+                e["slug"]
+                for e in snapshot(self.now)["flags"]["test flag"]["experiments"]
+            ],
+        )
 
     def test_config_flag_experiment_ending_now_not_included(self):
         make_experiment(
@@ -103,7 +124,13 @@ class ConfigTest(TestCase):
             feature_flag=self.feature_flag,
         )
 
-        self.assertNotIn("test-experiment", [e["slug"] for e in snapshot(self.now)["flags"]["test flag"]["experiments"]])
+        self.assertNotIn(
+            "test-experiment",
+            [
+                e["slug"]
+                for e in snapshot(self.now)["flags"]["test flag"]["experiments"]
+            ],
+        )
 
 
 class ExperimentTest(TestCase):
@@ -204,4 +231,3 @@ class ExperimentTest(TestCase):
             )
 
         self.assertTrue("'split_b' must be greater than 0" in cm.exception.messages[0])
-

@@ -6,7 +6,7 @@ from django.utils import timezone
 from experimentation.models import Experiment, FeatureFlag
 
 
-def snapshot(now : datetime | None = None):
+def snapshot(now: datetime | None = None):
     now = now or timezone.now()
     current_experiments = Experiment.objects.filter(end_at__gt=now).order_by("start_at")
 
