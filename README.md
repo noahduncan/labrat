@@ -1,3 +1,5 @@
+![Build Status](https://github.com/noahduncan/labrat/actions/workflows/python.yml/badge.svg)
+
 # Labrat
 
 Purpose: To practice python as a web language and think through the experimentation domain.
