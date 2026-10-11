@@ -12,4 +12,3 @@ def index(request):
 def config_snapshot(request) -> JsonResponse:
     snapshot = config.snapshot()
     return JsonResponse(snapshot)
-

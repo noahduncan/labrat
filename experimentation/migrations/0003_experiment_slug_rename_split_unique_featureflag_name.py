@@ -4,31 +4,36 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('experimentation', '0002_rename_split1_experiment_split_a_and_more'),
+        ("experimentation", "0002_rename_split1_experiment_split_a_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='experiment',
-            name='slug',
-            field=models.SlugField(default='slug', editable=False, max_length=255, unique=True),
+            model_name="experiment",
+            name="slug",
+            field=models.SlugField(
+                default="slug", editable=False, max_length=255, unique=True
+            ),
             preserve_default=False,
         ),
         migrations.AlterField(
-            model_name='experiment',
-            name='split_a',
-            field=models.IntegerField(db_comment='% of users who see the control', default=50),
+            model_name="experiment",
+            name="split_a",
+            field=models.IntegerField(
+                db_comment="% of users who see the control", default=50
+            ),
         ),
         migrations.AlterField(
-            model_name='experiment',
-            name='split_b',
-            field=models.IntegerField(db_comment='% of users who see the treatment', default=50),
+            model_name="experiment",
+            name="split_b",
+            field=models.IntegerField(
+                db_comment="% of users who see the treatment", default=50
+            ),
         ),
         migrations.AlterField(
-            model_name='featureflag',
-            name='name',
+            model_name="featureflag",
+            name="name",
             field=models.CharField(max_length=255, unique=True),
         ),
     ]
