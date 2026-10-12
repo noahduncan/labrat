@@ -155,7 +155,9 @@ def test_is_flag_on_skips_ended_experiment_in_stale_config():
         slug="ended", start_at=NOW - timedelta(days=2), end_at=NOW - timedelta(days=1)
     )
     active = create_experiment(
-        slug="experiment", start_at=NOW - timedelta(days=1), end_at=NOW + timedelta(days=1)
+        slug="experiment",
+        start_at=NOW - timedelta(days=1),
+        end_at=NOW + timedelta(days=1),
     )
     flags = create_flag_dict("flag", False, [ended, active])
 

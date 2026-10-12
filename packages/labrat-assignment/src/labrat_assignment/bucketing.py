@@ -1,7 +1,7 @@
 import hashlib
 
 
-def bucket_for(experiment_slug: str, user_id: int) -> int:
+def bucket_for(experiment_slug: str, user_id: str) -> int:
     """
     Returns the assigned bucket number for a given experiment slug and user id.
     """
