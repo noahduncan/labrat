@@ -1,8 +1,9 @@
 ![Build Status](https://github.com/noahduncan/labrat/actions/workflows/python.yml/badge.svg)
 
-# Labrat
+# Labrat - an experimental experimentations platform
 
-Purpose: To practice python as a web language and think through the experimentation domain.
+>[!important]
+>This is a work in progress.
 
 ## Planning
 
