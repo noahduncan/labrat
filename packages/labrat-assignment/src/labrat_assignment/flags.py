@@ -1,0 +1,41 @@
+import warnings
+from datetime import UTC, datetime
+
+from labrat_assignment import bucket_for
+from labrat_assignment.exceptions import LabratWarning
+
+
+class FlagResult:
+    def __init__(
+        self, enabled: bool, experiment_slug: str | None, variant: str | None
+    ) -> None:
+        self.enabled = enabled
+        self.experiment_slug = experiment_slug
+        self.variant = variant
+
+
+def is_flag_on(
+    flags: dict, flag_name: str, user_id: str, now: datetime | None = None
+) -> FlagResult:
+    now = now or datetime.now(UTC)
+    flag = flags.get(flag_name)
+    if flag is None:
+        warnings.warn(f"Flag {flag_name} is not configured", LabratWarning)
+        return FlagResult(False, None, None)
+
+    experiments = flag.get("experiments")
+
+    if not experiments:
+        return FlagResult(flag["enabled"], None, None)
+
+    for experiment in experiments:
+        if experiment["start_at"] <= now < experiment["end_at"]:
+            variant = (
+                "A"
+                if bucket_for(experiment["slug"], user_id) < experiment["split_a"]
+                else "B"
+            )
+            enabled = flag["enabled"] if variant == "A" else not flag["enabled"]
+            return FlagResult(enabled, experiment["slug"], variant)
+
+    return FlagResult(flag["enabled"], None, None)
