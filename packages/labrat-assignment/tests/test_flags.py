@@ -1,0 +1,173 @@
+from datetime import UTC, datetime, timedelta
+
+import pytest
+from labrat_assignment import bucket_for
+from labrat_assignment.exceptions import LabratWarning
+from labrat_assignment.flags import FlagResult, is_flag_on
+
+NOW = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
+
+# Known buckets for the slug "experiment" (asserted in test_known_buckets).
+TREATMENT_USER = "1"  # bucket 96
+CONTROL_USER = "268"  # bucket 10
+BOUNDARY_USER = "148"  # bucket 50
+
+
+def create_flag_dict(flag_name: str, enabled: bool, experiments: list) -> dict:
+    """
+    The server returns flags under a root key of "flags", but that is stripped out in
+    the client. We skip it here too as this emulates what the client would request.
+    """
+    return {
+        flag_name: {
+            "enabled": enabled,
+            "experiments": experiments,
+        }
+    }
+
+
+def create_experiment(
+    slug: str = "experiment",
+    split_a: int = 50,
+    start_at: datetime = NOW - timedelta(days=1),
+    end_at: datetime = NOW + timedelta(days=1),
+) -> dict:
+    return {
+        "slug": slug,
+        "split_a": split_a,
+        "split_b": 100 - split_a,
+        "start_at": start_at,
+        "end_at": end_at,
+    }
+
+
+def assert_result(
+    result: FlagResult, enabled: bool, experiment_slug: str | None, variant: str | None
+):
+    assert result.enabled == enabled
+    assert result.experiment_slug == experiment_slug
+    assert result.variant == variant
+
+
+def test_known_buckets():
+    """Guards the user constants above; if bucketing changes, update them."""
+    assert bucket_for("experiment", TREATMENT_USER) == 96
+    assert bucket_for("experiment", CONTROL_USER) == 10
+    assert bucket_for("experiment", BOUNDARY_USER) == 50
+
+
+@pytest.mark.parametrize("flag_enabled", [False, True])
+def test_is_flag_on_active_experiment_treatment_group_returns_not_flag_enabled(
+    flag_enabled: bool,
+):
+    flags = create_flag_dict("flag", flag_enabled, [create_experiment()])
+
+    result = is_flag_on(flags, "flag", TREATMENT_USER, NOW)
+
+    assert_result(result, not flag_enabled, "experiment", "B")
+
+
+@pytest.mark.parametrize("flag_enabled", [False, True])
+def test_is_flag_on_active_experiment_control_group_returns_flag_enabled(
+    flag_enabled: bool,
+):
+    flags = create_flag_dict("flag", flag_enabled, [create_experiment()])
+
+    result = is_flag_on(flags, "flag", CONTROL_USER, NOW)
+
+    assert_result(result, flag_enabled, "experiment", "A")
+
+
+def test_is_flag_on_bucket_equal_to_split_a_is_treatment():
+    """Control is buckets [0, split_a), so bucket == split_a is the first B bucket."""
+    flags = create_flag_dict("flag", False, [create_experiment(split_a=50)])
+
+    result = is_flag_on(flags, "flag", BOUNDARY_USER, NOW)
+
+    assert result.variant == "B"
+
+
+@pytest.mark.parametrize(("split_a", "expected_variant"), [(0, "B"), (100, "A")])
+def test_is_flag_on_extreme_splits_put_everyone_in_one_variant(
+    split_a: int, expected_variant: str
+):
+    flags = create_flag_dict("flag", False, [create_experiment(split_a=split_a)])
+
+    variants = {is_flag_on(flags, "flag", str(u), NOW).variant for u in range(1000)}
+
+    assert variants == {expected_variant}
+
+
+@pytest.mark.parametrize("flag_enabled", [False, True])
+def test_is_flag_on_no_experiments_returns_flag_enabled_state(flag_enabled: bool):
+    flags = create_flag_dict("flag", flag_enabled, [])
+
+    result = is_flag_on(flags, "flag", TREATMENT_USER, NOW)
+
+    assert_result(result, flag_enabled, None, None)
+
+
+@pytest.mark.parametrize("flag_enabled", [False, True])
+def test_is_flag_on_future_experiment_returns_flag_enabled_state(flag_enabled: bool):
+    experiment = create_experiment(
+        start_at=NOW + timedelta(days=1), end_at=NOW + timedelta(days=2)
+    )
+    flags = create_flag_dict("flag", flag_enabled, [experiment])
+
+    result = is_flag_on(flags, "flag", TREATMENT_USER, NOW)
+
+    assert_result(result, flag_enabled, None, None)
+
+
+@pytest.mark.parametrize("flag_enabled", [False, True])
+def test_is_flag_on_ended_experiment_returns_flag_enabled_state(flag_enabled: bool):
+    experiment = create_experiment(
+        start_at=NOW - timedelta(days=2), end_at=NOW - timedelta(days=1)
+    )
+    flags = create_flag_dict("flag", flag_enabled, [experiment])
+
+    result = is_flag_on(flags, "flag", TREATMENT_USER, NOW)
+
+    assert_result(result, flag_enabled, None, None)
+
+
+def test_is_flag_on_experiment_starting_now_is_active():
+    experiment = create_experiment(start_at=NOW, end_at=NOW + timedelta(days=1))
+    flags = create_flag_dict("flag", False, [experiment])
+
+    result = is_flag_on(flags, "flag", TREATMENT_USER, NOW)
+
+    assert result.experiment_slug == "experiment"
+
+
+def test_is_flag_on_experiment_ending_now_is_not_active():
+    experiment = create_experiment(start_at=NOW - timedelta(days=1), end_at=NOW)
+    flags = create_flag_dict("flag", False, [experiment])
+
+    result = is_flag_on(flags, "flag", TREATMENT_USER, NOW)
+
+    assert_result(result, False, None, None)
+
+
+def test_is_flag_on_skips_ended_experiment_in_stale_config():
+    """A cached config can still list an ended experiment before the active one."""
+    ended = create_experiment(
+        slug="ended", start_at=NOW - timedelta(days=2), end_at=NOW - timedelta(days=1)
+    )
+    active = create_experiment(
+        slug="experiment", start_at=NOW - timedelta(days=1), end_at=NOW + timedelta(days=1)
+    )
+    flags = create_flag_dict("flag", False, [ended, active])
+
+    result = is_flag_on(flags, "flag", TREATMENT_USER, NOW)
+
+    assert_result(result, True, "experiment", "B")
+
+
+def test_is_flag_on_no_flag_emits_warning_and_returns_false():
+    flags = create_flag_dict("flag", False, [])
+
+    with pytest.warns(LabratWarning, match=r"Flag flag_not_present is not configured"):
+        result = is_flag_on(flags, "flag_not_present", TREATMENT_USER, NOW)
+
+    assert_result(result, False, None, None)
