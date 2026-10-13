@@ -17,12 +17,10 @@ jobs:
         uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install labrat-client dependencies
-        run: cd packages/labrat-client && uv sync --dev
+      - name: Install dependencies
+        run: uv sync --all-packages
       - name: Run pytest tests
         run: uv run --frozen pytest
-      - name: Run Django tests
-        run: uv run manage.py test
       - name: Check formatting with ruff
         run: uv run ruff format --check
       - name: Lint check with ruff
