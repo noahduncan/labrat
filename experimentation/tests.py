@@ -15,11 +15,11 @@ def make_experiment(**overrides):
     now = timezone.now()
     fields = {
         "name": "test experiment" + str(next(_counter)),
-        "prediction": "The future",
+        "hypothesis": "The future",
         "start_at": now,
         "end_at": now + timedelta(days=1),
-        "split_a": 40,
-        "split_b": 60,
+        "control": 40,
+        "treatment": 60,
         **overrides,
     }
     if "feature_flag" not in fields:
@@ -74,9 +74,9 @@ class ConfigTest(TestCase):
             start_at=self.now - timedelta(days=1),
             end_at=self.now + timedelta(days=1),
             feature_flag=self.feature_flag,
-            prediction="The future",
-            split_a=40,
-            split_b=60,
+            hypothesis="The future",
+            control=40,
+            treatment=60,
         )
 
         self.assertEqual(
@@ -89,8 +89,8 @@ class ConfigTest(TestCase):
                             {
                                 "name": "test experiment",
                                 "slug": "test-experiment",
-                                "split_a": 40,
-                                "split_b": 60,
+                                "control": 40,
+                                "treatment": 60,
                                 "start_at": self.now - timedelta(days=1),
                                 "end_at": self.now + timedelta(days=1),
                             }
@@ -208,26 +208,26 @@ class ExperimentTest(TestCase):
     def test_experiment_error_if_splits_do_not_sum_to_100(self):
         with self.assertRaises(ValidationError) as cm:
             make_experiment(
-                split_a=40,
-                split_b=40,
+                control=40,
+                treatment=40,
             )
 
         self.assertTrue("must sum to 100" in cm.exception.messages[0])
 
-    def test_experiment_error_if_split_a_not_in_range(self):
+    def test_experiment_error_if_control_not_in_range(self):
         for value in [-10, 0, 100]:
             with self.subTest(value=value):
                 with self.assertRaises(ValidationError) as cm:
-                    make_experiment(split_a=value, split_b=100 - value)
+                    make_experiment(control=value, treatment=100 - value)
                 self.assertIn(
-                    "'split_a' must be a value from 1 to 99", cm.exception.messages
+                    "'control' must be a value from 1 to 99", cm.exception.messages
                 )
 
-    def test_experiment_error_if_split_b_not_in_range(self):
+    def test_experiment_error_if_treatment_not_in_range(self):
         for value in [-10, 0, 100]:
             with self.subTest(value=value):
                 with self.assertRaises(ValidationError) as cm:
-                    make_experiment(split_a=100 - value, split_b=value)
+                    make_experiment(control=100 - value, treatment=value)
                 self.assertIn(
-                    "'split_b' must be a value from 1 to 99", cm.exception.messages
+                    "'treatment' must be a value from 1 to 99", cm.exception.messages
                 )

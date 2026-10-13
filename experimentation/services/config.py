@@ -26,8 +26,8 @@ def snapshot(now: datetime | None = None):
                     {
                         "name": e.name,
                         "slug": e.slug,
-                        "split_a": e.split_a,
-                        "split_b": e.split_b,
+                        "control": e.control,
+                        "treatment": e.treatment,
                         "start_at": e.start_at,
                         "end_at": e.end_at,
                     }

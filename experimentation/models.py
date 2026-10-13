@@ -15,11 +15,11 @@ class Experiment(models.Model):
     feature_flag = models.ForeignKey(FeatureFlag, on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, unique=True, editable=False)
-    prediction = models.TextField()
-    split_a = models.IntegerField(
+    hypothesis = models.TextField()
+    control = models.IntegerField(
         default=50, db_comment="% of users who see the control"
     )
-    split_b = models.IntegerField(
+    treatment = models.IntegerField(
         default=50, db_comment="% of users who see the treatment"
     )
     start_at = models.DateTimeField()
@@ -44,22 +44,22 @@ class Experiment(models.Model):
                 ValidationError("'end_at' must be after 'start_at'")
             )
 
-        if self.split_a is not None and not (1 <= self.split_a <= 99):
-            field_errors["split_a"] = ValidationError(
-                "'split_a' must be a value from 1 to 99"
+        if self.control is not None and not (1 <= self.control <= 99):
+            field_errors["control"] = ValidationError(
+                "'control' must be a value from 1 to 99"
             )
 
-        if self.split_b is not None and not (1 <= self.split_b <= 99):
-            field_errors["split_b"] = ValidationError(
-                "'split_b' must be a value from 1 to 99"
+        if self.treatment is not None and not (1 <= self.treatment <= 99):
+            field_errors["treatment"] = ValidationError(
+                "'treatment' must be a value from 1 to 99"
             )
 
         if (
-            None not in (self.split_a, self.split_b)
-            and self.split_a + self.split_b != 100
+            None not in (self.control, self.treatment)
+            and self.control + self.treatment != 100
         ):
             non_field_errors.append(
-                ValidationError("'split_a' and 'split_b' must sum to 100")
+                ValidationError("'control' and 'treatment' must sum to 100")
             )
 
         # Check for any other experiments with an overlapping start/end range.

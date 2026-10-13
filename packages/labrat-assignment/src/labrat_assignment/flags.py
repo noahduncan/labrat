@@ -35,11 +35,11 @@ def is_flag_on(
     for experiment in experiments:
         if experiment["start_at"] <= now < experiment["end_at"]:
             variant = (
-                "A"
-                if bucket_for(experiment["slug"], user_id) < experiment["split_a"]
-                else "B"
+                "control"
+                if bucket_for(experiment["slug"], user_id) < experiment["control"]
+                else "treatment"
             )
-            enabled = flag["enabled"] if variant == "A" else not flag["enabled"]
+            enabled = flag["enabled"] if variant == "control" else not flag["enabled"]
             return FlagResult(enabled, experiment["slug"], variant)
 
     return FlagResult(flag["enabled"], None, None)
