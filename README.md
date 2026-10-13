@@ -2,17 +2,62 @@
 
 # Labrat - an experimental experimentations platform
 
->[!important]
+> [!important]
 >This is a work in progress.
 
 ## Planning
 
+### MVP Scope
+
 Experimentation has decent amount of depth, but here we are going to focus on the primary facets of it:
+
+```mermaid
+flowchart LR
+    experimenter(["Experimenter"])
+    developer(["App developer"])
+    enduser(["End user"])
+
+    subgraph server["Labrat server (Django)"]
+        admin["Django admin"]
+        configapi["Config API<br/>GET /api/v1/config"]
+        exposureapi["Exposure API<br/>POST /api/v1/exposures"]
+        actionapi["Action API"]
+        reporting["Reporting"]
+        db[("Database<br/>flags, experiments,<br/>exposures, actions")]
+    end
+
+    subgraph host["Host application"]
+        appcode["App code"]
+        subgraph sdk["labrat-client package"]
+            client["LabratClient<br/>config cache + polling thread"]
+            evaluate["flags.evaluate<br/>bucket_for(slug, user_id)<br/>control or treatment"]
+        end
+    end
+
+    experimenter -->|" creates flags and experiments "| admin
+    admin --> db
+    db --> configapi
+    client -->|" polls every 30s "| configapi
+    developer -->|" wraps features in is_flag_on "| appcode
+    enduser -->|" uses "| appcode
+    appcode -->|" is_flag_on(flag, user) "| client
+    client -->|" evaluates locally "| evaluate
+    client -.->|" records exposure "| exposureapi
+    appcode -.->|" records action "| actionapi
+    exposureapi -.-> db
+    actionapi -.-> db
+    db -.-> reporting
+    experimenter -.->|" reads results "| reporting
+    classDef planned stroke-dasharray: 5 4
+    class exposureapi,actionapi,reporting planned
+```
+
+**Progress**
 
 1. [x] List of experiments / feature flags
 2. [x] Assignment algorithm - changing to key on experiment slug
-3. [ ] Basic code interface
-    * [ ] check if flag is on
+3. [x] Basic code interface
+    * [x] check if flag is on
     * [x] fetch flag/experiment config
 4. [ ] Exposure log
     * [ ] back-end
@@ -21,17 +66,42 @@ Experimentation has decent amount of depth, but here we are going to focus on th
     * [ ] back-end
     * [ ] client
 6. [ ] Reporting / significance testing
+7. [ ] Data generator (to test reporting and quickly make interesting data for a UI)
 
-### Experiment / feature flag definitions
+### After MVP
+
+* Expand experiment capabilities
+  * End after # of samples, time is really just a proxy for that.
+  * Allow additional variants (A/B/n)
+  * Guardrail metrics (requires the system has awareness of real-time metrics)
+  * Ramp-up (release experiment to an increasing % of subjects growing at a cadence)
+* Build a single contract to enforce server/client data consistency
+* Add an MCP server to allow agents to interact with experiments / data sets
+* Convert to PostgreSQL
+    * Add additional constraints to data (tstzrange on start/end)
+* Authentication (multitenancy)
+* Batch send exposures? (scalability)
+* JavaScript SDK? (scalability)
+* Read external data (hook into reporting)?
+    * Google Analytics
+    * Hotjar
+    * ...
+* Data export?
+* History tables (observability)
+    * Experiments
+    * FeatureFlags
+
+### Database design
 
 * Feature Flags
     * id
-    * name
+    * name (unique)
     * enabled
 * Experiments
     * id
     * feature_flag_id
     * name
+    * slug (unique)
     * hypothesis
     * control
     * treatment
@@ -42,7 +112,7 @@ Experimentation has decent amount of depth, but here we are going to focus on th
 
 Bucket = (int) hashlib.sha256 (experiment.slug + ":" + user_id) % 100;
 
-### Code interface
+### Client
 
 * Fetch config
     * For this version, will use polling, but at scale pub/sub and/or config caching is needed.
@@ -64,16 +134,28 @@ Exposure Table:
 
 * id
 * created_at
+* feature_flag_id
 * experiment_id
-* user_id
+* subject
+* variant
+* exposed_at
 
-**Questions:**
+**Exposure API fields**
 
-* Who should own the exposure data? It feels a little funny to have a client say "I exposed user X to experiment Y" from
-  a "client has too much power" / bad-actors perspective. That concern feels like it could be reasonably mitigated by
-  server-side validations (can't expose to an experiment that isn't running...but what if you have a cache of exposure
-  events that come in bulk after an experiment ends...oy!...I guess some kind of buffering window allowing exposures to
-  be logged for some amount of time after experiment end).
+* exposed_at
+* experiment_id (slug?)
+* feature_flag_id
+* subject_id
+* variant
+
+**Validation:**
+
+There is a chance that bad data can come in from a client due to out-of-date configuration caches. We can add some basic
+validations to the received exposures to help understand what is good/bad and why.
+
+* Compute expected exposure for a given flag at a specific time with specific subject.
+* If expected exposure doesn't match given exposure, flag given exposure as invalid
+* Record exposure + with audit field, `created_at`
 
 ### Action log
 
@@ -84,7 +166,7 @@ Action Table:
 
 * id
 * created_at
-* user_id
+* subject
 * action
 
 ### Reporting
