@@ -100,5 +100,5 @@ class LabratClient:
         if not self.config:
             return default
 
-        flag_result = flags.is_flag_on(self.config, flag_name, user_id, default=default)
+        flag_result = flags.evaluate(self.config, flag_name, user_id, default=default)
         return flag_result.enabled

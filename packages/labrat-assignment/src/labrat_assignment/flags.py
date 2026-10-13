@@ -14,7 +14,7 @@ class FlagResult:
         self.variant = variant
 
 
-def is_flag_on(
+def evaluate(
     flags: dict,
     flag_name: str,
     user_id: str,
