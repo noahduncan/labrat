@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from labrat_assignment import bucket_for
+from labrat_assignment.bucketing import bucket_for
 from labrat_assignment.exceptions import LabratWarning
 from labrat_assignment.flags import FlagResult, evaluate
 
