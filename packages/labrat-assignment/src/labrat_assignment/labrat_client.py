@@ -69,14 +69,14 @@ class LabratClient:
 
     @staticmethod
     def parse_config(config: dict) -> dict:
-        flags = config["flags"]
+        config_flags = config["flags"]
 
-        for flag in flags.values():
+        for flag in config_flags.values():
             for experiment in flag["experiments"]:
                 experiment["start_at"] = datetime.fromisoformat(experiment["start_at"])
                 experiment["end_at"] = datetime.fromisoformat(experiment["end_at"])
 
-        return flags
+        return config_flags
 
     def fetch_config(self, timeout: float = 5) -> dict:
         """
