@@ -44,17 +44,20 @@ class Experiment(models.Model):
                 ValidationError("'end_at' must be after 'start_at'")
             )
 
-        if self.split_a and self.split_a < 0:
+        if self.split_a is not None and not (1 <= self.split_a <= 99):
             field_errors["split_a"] = ValidationError(
-                "'split_a' must be greater than 0"
+                "'split_a' must be a value from 1 to 99"
             )
 
-        if self.split_b and self.split_b < 0:
+        if self.split_b is not None and not (1 <= self.split_b <= 99):
             field_errors["split_b"] = ValidationError(
-                "'split_b' must be greater than 0"
+                "'split_b' must be a value from 1 to 99"
             )
 
-        if self.split_a and self.split_b and self.split_a + self.split_b != 100:
+        if (
+            None not in (self.split_a, self.split_b)
+            and self.split_a + self.split_b != 100
+        ):
             non_field_errors.append(
                 ValidationError("'split_a' and 'split_b' must sum to 100")
             )

@@ -214,20 +214,20 @@ class ExperimentTest(TestCase):
 
         self.assertTrue("must sum to 100" in cm.exception.messages[0])
 
-    def test_experiment_error_if_split_a_lte_0(self):
-        with self.assertRaises(ValidationError) as cm:
-            make_experiment(
-                split_a=-10,
-                split_b=110,
-            )
+    def test_experiment_error_if_split_a_not_in_range(self):
+        for value in [-10, 0, 100]:
+            with self.subTest(value=value):
+                with self.assertRaises(ValidationError) as cm:
+                    make_experiment(split_a=value, split_b=100 - value)
+                self.assertIn(
+                    "'split_a' must be a value from 1 to 99", cm.exception.messages
+                )
 
-        self.assertTrue("'split_a' must be greater than 0" in cm.exception.messages[0])
-
-    def test_experiment_error_if_split_b_lte_0(self):
-        with self.assertRaises(ValidationError) as cm:
-            make_experiment(
-                split_a=110,
-                split_b=-10,
-            )
-
-        self.assertTrue("'split_b' must be greater than 0" in cm.exception.messages[0])
+    def test_experiment_error_if_split_b_not_in_range(self):
+        for value in [-10, 0, 100]:
+            with self.subTest(value=value):
+                with self.assertRaises(ValidationError) as cm:
+                    make_experiment(split_a=100 - value, split_b=value)
+                self.assertIn(
+                    "'split_b' must be a value from 1 to 99", cm.exception.messages
+                )
