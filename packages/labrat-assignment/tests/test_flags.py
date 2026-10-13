@@ -166,10 +166,12 @@ def test_is_flag_on_skips_ended_experiment_in_stale_config():
     assert_result(result, True, "experiment", "B")
 
 
-def test_is_flag_on_no_flag_emits_warning_and_returns_false():
+def test_is_flag_on_no_flag_emits_warning_and_returns_default():
     flags = create_flag_dict("flag", False, [])
 
     with pytest.warns(LabratWarning, match=r"Flag flag_not_present is not configured"):
-        result = is_flag_on(flags, "flag_not_present", TREATMENT_USER, NOW)
+        result = is_flag_on(
+            flags, "flag_not_present", TREATMENT_USER, NOW, default=True
+        )
 
-    assert_result(result, False, None, None)
+    assert_result(result, True, None, None)
