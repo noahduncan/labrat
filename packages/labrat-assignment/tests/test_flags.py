@@ -28,14 +28,14 @@ def create_flag_dict(flag_name: str, enabled: bool, experiments: list) -> dict:
 
 def create_experiment(
     slug: str = "experiment",
-    split_a: int = 50,
+    control: int = 50,
     start_at: datetime = NOW - timedelta(days=1),
     end_at: datetime = NOW + timedelta(days=1),
 ) -> dict:
     return {
         "slug": slug,
-        "split_a": split_a,
-        "split_b": 100 - split_a,
+        "control": control,
+        "treatment": 100 - control,
         "start_at": start_at,
         "end_at": end_at,
     }
@@ -64,7 +64,7 @@ def test_is_flag_on_active_experiment_treatment_group_returns_not_flag_enabled(
 
     result = is_flag_on(flags, "flag", TREATMENT_USER, NOW)
 
-    assert_result(result, not flag_enabled, "experiment", "B")
+    assert_result(result, not flag_enabled, "experiment", "treatment")
 
 
 @pytest.mark.parametrize("flag_enabled", [False, True])
@@ -75,23 +75,25 @@ def test_is_flag_on_active_experiment_control_group_returns_flag_enabled(
 
     result = is_flag_on(flags, "flag", CONTROL_USER, NOW)
 
-    assert_result(result, flag_enabled, "experiment", "A")
+    assert_result(result, flag_enabled, "experiment", "control")
 
 
-def test_is_flag_on_bucket_equal_to_split_a_is_treatment():
-    """Control is buckets [0, split_a), so bucket == split_a is the first B bucket."""
-    flags = create_flag_dict("flag", False, [create_experiment(split_a=50)])
+def test_is_flag_on_bucket_equal_to_control_is_treatment():
+    """Control is buckets [0, control), so bucket == control is the first B bucket."""
+    flags = create_flag_dict("flag", False, [create_experiment(control=50)])
 
     result = is_flag_on(flags, "flag", BOUNDARY_USER, NOW)
 
-    assert result.variant == "B"
+    assert result.variant == "treatment"
 
 
-@pytest.mark.parametrize(("split_a", "expected_variant"), [(0, "B"), (100, "A")])
+@pytest.mark.parametrize(
+    ("control", "expected_variant"), [(0, "treatment"), (100, "control")]
+)
 def test_is_flag_on_extreme_splits_put_everyone_in_one_variant(
-    split_a: int, expected_variant: str
+    control: int, expected_variant: str
 ):
-    flags = create_flag_dict("flag", False, [create_experiment(split_a=split_a)])
+    flags = create_flag_dict("flag", False, [create_experiment(control=control)])
 
     variants = {is_flag_on(flags, "flag", str(u), NOW).variant for u in range(1000)}
 
@@ -163,7 +165,7 @@ def test_is_flag_on_skips_ended_experiment_in_stale_config():
 
     result = is_flag_on(flags, "flag", TREATMENT_USER, NOW)
 
-    assert_result(result, True, "experiment", "B")
+    assert_result(result, True, "experiment", "treatment")
 
 
 def test_is_flag_on_no_flag_emits_warning_and_returns_default():

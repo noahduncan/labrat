@@ -32,9 +32,9 @@ Experimentation has decent amount of depth, but here we are going to focus on th
     * id
     * feature_flag_id
     * name
-    * prediction_description
-    * split_a
-    * split_b
+    * hypothesis
+    * control
+    * treatment
     * start_at
     * end_at
 
