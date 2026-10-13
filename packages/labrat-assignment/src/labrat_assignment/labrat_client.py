@@ -12,6 +12,8 @@ from labrat_assignment.exceptions import (
     LabratError,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class LabratClient:
     """
@@ -58,14 +60,12 @@ class LabratClient:
             self._refresh()
 
     def _refresh(self, timeout: float = 5):
-        logger = logging.getLogger(__name__)
-
         try:
             self.config = self.fetch_config(timeout)
         except LabratError as e:
-            logger.warning(f"Config refresh failed {e}", exc_info=True)
-        except Exception as e:
-            logger.warning(f"Unexpected error during config refresh {e}", exc_info=True)
+            logger.warning("Config refresh failed: %s", e)
+        except Exception:
+            logger.warning("Unexpected error during config refresh", exc_info=True)
 
     @staticmethod
     def parse_config(config: dict) -> dict:
