@@ -15,13 +15,17 @@ class FlagResult:
 
 
 def is_flag_on(
-    flags: dict, flag_name: str, user_id: str, now: datetime | None = None
+    flags: dict,
+    flag_name: str,
+    user_id: str,
+    now: datetime | None = None,
+    default: bool = False,
 ) -> FlagResult:
     now = now or datetime.now(UTC)
     flag = flags.get(flag_name)
     if flag is None:
         warnings.warn(f"Flag {flag_name} is not configured", LabratWarning)
-        return FlagResult(False, None, None)
+        return FlagResult(default, None, None)
 
     experiments = flag.get("experiments")
 
