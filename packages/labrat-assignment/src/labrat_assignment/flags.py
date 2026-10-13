@@ -1,7 +1,7 @@
 import warnings
 from datetime import UTC, datetime
 
-from labrat_assignment import bucket_for
+from labrat_assignment.bucketing import bucket_for
 from labrat_assignment.exceptions import LabratWarning
 
 
