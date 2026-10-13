@@ -1,9 +1,9 @@
 class LabratWarning(UserWarning):
-    """Warning for labrat-assignment"""
+    """Warning for labrat-client"""
 
 
 class LabratError(Exception):
-    """General error for labrat-assignment"""
+    """General error for labrat-client"""
 
 
 class LabratConnectionError(LabratError):

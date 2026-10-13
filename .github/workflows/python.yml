@@ -17,8 +17,8 @@ jobs:
         uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install labrat-assignment dependencies
-        run: cd packages/labrat-assignment && uv sync --dev
+      - name: Install labrat-client dependencies
+        run: cd packages/labrat-client && uv sync --dev
       - name: Run pytest tests
         run: uv run --frozen pytest
       - name: Run Django tests

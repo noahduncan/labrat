@@ -1,4 +1,4 @@
-from labrat_assignment.bucketing import bucket_for
+from labrat_client.bucketing import bucket_for
 from pytest import mark
 
 EXPECTED_BUCKETS = [
