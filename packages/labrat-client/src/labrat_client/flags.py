@@ -1,8 +1,8 @@
 import warnings
 from datetime import UTC, datetime
 
-from labrat_assignment.bucketing import bucket_for
-from labrat_assignment.exceptions import LabratWarning
+from labrat_client.bucketing import bucket_for
+from labrat_client.exceptions import LabratWarning
 
 
 class FlagResult:

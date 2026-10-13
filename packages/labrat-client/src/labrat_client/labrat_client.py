@@ -5,8 +5,8 @@ from datetime import datetime
 
 import requests
 
-from labrat_assignment import flags
-from labrat_assignment.exceptions import (
+from labrat_client import flags
+from labrat_client.exceptions import (
     LabratConfigError,
     LabratConnectionError,
     LabratError,

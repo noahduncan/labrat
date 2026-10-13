@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 import responses
-from labrat_assignment.labrat_client import LabratClient
+from labrat_client.labrat_client import LabratClient
 
 TEST_URL = "http://labrat.test"
 

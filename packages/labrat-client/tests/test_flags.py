@@ -1,9 +1,9 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from labrat_assignment.bucketing import bucket_for
-from labrat_assignment.exceptions import LabratWarning
-from labrat_assignment.flags import FlagResult, evaluate
+from labrat_client.bucketing import bucket_for
+from labrat_client.exceptions import LabratWarning
+from labrat_client.flags import FlagResult, evaluate
 
 NOW = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
 
