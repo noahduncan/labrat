@@ -111,19 +111,15 @@ class ExperimentTest(TestCase):
         self.assertTrue("must sum to 100" in cm.exception.messages[0])
 
     def test_experiment_error_if_control_not_in_range(self):
-        for value in [-10, 0, 100]:
+        for value, code in [(-10, "min_value"), (0, "min_value"), (100, "max_value")]:
             with self.subTest(value=value):
                 with self.assertRaises(ValidationError) as cm:
-                    make_experiment(control=value, treatment=100 - value)
-                self.assertIn(
-                    "'control' must be a value from 1 to 99", cm.exception.messages
-                )
+                    make_experiment(control=value, treatment=50)
+                self.assertEqual(cm.exception.error_dict["control"][0].code, code)
 
     def test_experiment_error_if_treatment_not_in_range(self):
-        for value in [-10, 0, 100]:
+        for value, code in [(-10, "min_value"), (0, "min_value"), (100, "max_value")]:
             with self.subTest(value=value):
                 with self.assertRaises(ValidationError) as cm:
-                    make_experiment(control=100 - value, treatment=value)
-                self.assertIn(
-                    "'treatment' must be a value from 1 to 99", cm.exception.messages
-                )
+                    make_experiment(control=50, treatment=value)
+                self.assertEqual(cm.exception.error_dict["treatment"][0].code, code)

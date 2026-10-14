@@ -1,4 +1,7 @@
+from typing import ClassVar
+
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.text import slugify
 
@@ -11,13 +14,26 @@ class Experiment(models.Model):
     slug = models.SlugField(max_length=255, unique=True, editable=False)
     hypothesis = models.TextField()
     control = models.IntegerField(
-        default=50, db_comment="% of users who see the control"
+        default=50,
+        db_comment="% of users who see the control",
+        validators=[MinValueValidator(1), MaxValueValidator(99)],
     )
     treatment = models.IntegerField(
-        default=50, db_comment="% of users who see the treatment"
+        default=50,
+        db_comment="% of users who see the treatment",
+        validators=[MinValueValidator(1), MaxValueValidator(99)],
     )
     start_at = models.DateTimeField()
     end_at = models.DateTimeField()
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(
+                condition=models.Q(treatment=100 - models.F("control")),
+                name="experiment_split_sums_to_100",
+                violation_error_message="'control' and 'treatment' must sum to 100",
+            )
+        ]
 
     def __str__(self):
         return self.name
@@ -36,24 +52,6 @@ class Experiment(models.Model):
         if self.start_at and self.end_at and self.end_at <= self.start_at:
             non_field_errors.append(
                 ValidationError("'end_at' must be after 'start_at'")
-            )
-
-        if self.control is not None and not (1 <= self.control <= 99):
-            field_errors["control"] = ValidationError(
-                "'control' must be a value from 1 to 99"
-            )
-
-        if self.treatment is not None and not (1 <= self.treatment <= 99):
-            field_errors["treatment"] = ValidationError(
-                "'treatment' must be a value from 1 to 99"
-            )
-
-        if (
-            None not in (self.control, self.treatment)
-            and self.control + self.treatment != 100
-        ):
-            non_field_errors.append(
-                ValidationError("'control' and 'treatment' must sum to 100")
             )
 
         # Check for any other experiments with an overlapping start/end range.
