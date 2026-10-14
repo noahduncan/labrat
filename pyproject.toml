@@ -20,6 +20,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-django>=4.14.0",
     "ruff>=0.16.10",
+    "time-machine>=3.5.1",
 ]
 
 [tool.ruff.lint]

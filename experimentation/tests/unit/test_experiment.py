@@ -11,7 +11,7 @@ _counter = count(1)
 
 
 def make_experiment(**overrides):
-    now = timezone.now()
+    now = timezone.now() + timedelta(minutes=5)
     fields = {
         "name": "test experiment" + str(next(_counter)),
         "hypothesis": "The future",
@@ -32,7 +32,7 @@ def make_experiment(**overrides):
 class ExperimentTest(TestCase):
     def setUp(self):
         self.feature_flag = FeatureFlag.objects.create(name="test feature flag")
-        self.now = timezone.now()
+        self.now = timezone.now() + timedelta(minutes=5)
 
     def test_experiment_generates_slug(self):
         experiment = make_experiment(
@@ -123,3 +123,8 @@ class ExperimentTest(TestCase):
                 with self.assertRaises(ValidationError) as cm:
                     make_experiment(control=50, treatment=value)
                 self.assertEqual(cm.exception.error_dict["treatment"][0].code, code)
+
+    def test_experiment_start_at_must_be_in_future(self):
+        with self.assertRaises(ValidationError) as cm:
+            make_experiment(start_at=self.now - timedelta(days=1), end_at=self.now)
+        self.assertIn("'start_at' must be in the future", cm.exception.messages)
