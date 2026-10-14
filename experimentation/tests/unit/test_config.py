@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
+import time_machine
 from django.test.testcases import TestCase
 
 from experimentation.models import FeatureFlag
@@ -7,11 +8,15 @@ from experimentation.services.config import snapshot
 
 from .test_experiment import make_experiment
 
+SETUP_TIME = datetime(2026, 10, 1, tzinfo=UTC)
 
+
+@time_machine.travel(SETUP_TIME, tick=False)
 class ConfigTest(TestCase):
     def setUp(self):
         self.feature_flag = FeatureFlag.objects.create(name="test flag")
-        self.now = datetime(2026, 10, 8, 0, tzinfo=UTC)
+        # self.now should be in the future relative to SETUP_TIME
+        self.now = datetime(2026, 10, 8, tzinfo=UTC)
 
     def test_config_flag_with_no_experiments(self):
         self.assertEqual(

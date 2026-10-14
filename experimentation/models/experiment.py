@@ -4,6 +4,7 @@ from typing import ClassVar
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils import timezone
 from django.utils.text import slugify
 
 from .feature_flag import FeatureFlag
@@ -48,6 +49,15 @@ class Experiment(models.Model):
 
     def clean(self):
         errors = defaultdict(list)
+
+        if (
+            self._state.adding
+            and self.start_at is not None
+            and self.start_at < timezone.now()
+        ):
+            errors["start_at"].append(
+                ValidationError("'start_at' must be in the future")
+            )
 
         if self.start_at and self.end_at and self.end_at <= self.start_at:
             errors[NON_FIELD_ERRORS].append(
