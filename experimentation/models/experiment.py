@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import ClassVar
 
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
@@ -46,11 +47,10 @@ class Experiment(models.Model):
         super().save(*args, **kwargs)
 
     def clean(self):
-        field_errors = {}
-        non_field_errors = []
+        errors = defaultdict(list)
 
         if self.start_at and self.end_at and self.end_at <= self.start_at:
-            non_field_errors.append(
+            errors[NON_FIELD_ERRORS].append(
                 ValidationError("'end_at' must be after 'start_at'")
             )
 
@@ -68,12 +68,9 @@ class Experiment(models.Model):
             .exclude(id=self.id)
             .exists()
         ):
-            non_field_errors.append(
+            errors[NON_FIELD_ERRORS].append(
                 ValidationError("This experiment overlaps with another experiment.")
             )
 
-        if non_field_errors:
-            field_errors[NON_FIELD_ERRORS] = non_field_errors
-
-        if field_errors:
-            raise ValidationError(field_errors)
+        if errors:
+            raise ValidationError(errors)
