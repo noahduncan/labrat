@@ -5,6 +5,9 @@
 > [!important]
 >This is a work in progress.
 
+**NOTE:** This repo contains a Django project and a separate python package
+(labrat-client). To get all dependencies run `uv sync --all-packages`
+
 ## Planning
 
 ### MVP Scope
