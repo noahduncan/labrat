@@ -52,12 +52,15 @@ class ExperimentTest(TestCase):
             end_at=self.now + timedelta(days=3),
             feature_flag=self.feature_flag,
         )
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(ValidationError) as cm:
             make_experiment(
                 start_at=self.now + timedelta(days=1),
                 end_at=self.now + timedelta(days=2),
                 feature_flag=self.feature_flag,
             )
+        self.assertEqual(
+            cm.exception.error_dict["__all__"][0].code, "experiment_overlap"
+        )
 
     def test_experiments_with_different_flags_can_overlap_dates(self):
         FeatureFlag.objects.create(name="secondary test_flag")
@@ -79,12 +82,15 @@ class ExperimentTest(TestCase):
             end_at=self.now + timedelta(days=2),
             feature_flag=self.feature_flag,
         )
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(ValidationError) as cm:
             make_experiment(
                 start_at=self.now + timedelta(days=1),
                 end_at=self.now + timedelta(days=2),
                 feature_flag=self.feature_flag,
             )
+        self.assertEqual(
+            cm.exception.error_dict["__all__"][0].code, "experiment_overlap"
+        )
 
     def test_experiment_can_abut_times(self):
         abutting_time = self.now + timedelta(days=2)
@@ -127,4 +133,6 @@ class ExperimentTest(TestCase):
     def test_experiment_start_at_must_be_in_future(self):
         with self.assertRaises(ValidationError) as cm:
             make_experiment(start_at=self.now - timedelta(days=1), end_at=self.now)
-        self.assertIn("'start_at' must be in the future", cm.exception.messages)
+        self.assertEqual(
+            cm.exception.error_dict["start_at"][0].code, "datetime_in_past"
+        )
