@@ -149,3 +149,76 @@ class ExperimentTest(TestCase):
         with self.assertRaises(ValidationError) as cm:
             make_experiment(start_at=self.now, end_at=self.now - timedelta(days=1))
         self.assertEqual(cm.exception.error_dict["__all__"][0].code, "end_before_start")
+
+    def test_experiment_cannot_edit_field_after_start_at(self):
+        for field, value in [
+            ("feature_flag", self.feature_flag),
+            ("start_at", self.now + timedelta(days=1)),
+            ("end_at", self.now + timedelta(days=4)),
+            ("hypothesis", "I want to change"),
+            ("control", 50),
+            ("treatment", 50),
+        ]:
+            with self.subTest(field=field):
+                e = make_experiment()
+                setattr(e, field, value)
+                with time_machine.travel(e.start_at + timedelta(hours=1), tick=False):
+                    with self.assertRaises(ValidationError) as cm:
+                        e.save()
+
+                    self.assertEqual(
+                        cm.exception.error_dict[field][0].code,
+                        "locked_after_start",
+                    )
+
+    def test_experiment_can_edit_name_after_start_at(self):
+        e = make_experiment()
+        e.name = "This is my new name"
+        with time_machine.travel(e.start_at + timedelta(hours=1), tick=False):
+            e.save()
+            e.refresh_from_db()
+            self.assertEqual(e.name, "This is my new name")
+
+    def test_experiment_can_edit_name_after_end_at(self):
+        e = make_experiment()
+        e.name = "This is my new name"
+        with time_machine.travel(e.end_at + timedelta(hours=1), tick=False):
+            e.save()
+            e.refresh_from_db()
+            self.assertEqual(e.name, "This is my new name")
+
+    def test_experiment_fields_are_editable_before_start_at(self):
+        for field, value in [
+            ("feature_flag", self.feature_flag),
+            ("start_at", self.now + timedelta(hours=1)),
+            ("end_at", self.now + timedelta(days=4)),
+            ("hypothesis", "I want to change"),
+        ]:
+            with self.subTest(field=field):
+                e = make_experiment()
+                setattr(e, field, value)
+                e.save()
+
+                e.refresh_from_db()
+                self.assertEqual(getattr(e, field), value)
+
+        e = make_experiment()
+        e.control = 50
+        e.treatment = 50
+        e.save()
+
+        e.refresh_from_db()
+        self.assertEqual(e.control, 50)
+        self.assertEqual(e.treatment, 50)
+
+    def test_experiment_from_db_cannot_edit_fields_after_start_at(self):
+        experiment_id = make_experiment().id
+        e = Experiment.objects.get(id=experiment_id)
+
+        with time_machine.travel(e.start_at + timedelta(hours=1), tick=False):
+            with self.assertRaises(ValidationError) as cm:
+                e.hypothesis = "I want to change"
+                e.save()
+            self.assertEqual(
+                cm.exception.error_dict["hypothesis"][0].code, "locked_after_start"
+            )
