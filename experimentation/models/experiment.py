@@ -57,12 +57,24 @@ class Experiment(models.Model):
 
     def clean(self):
         errors = defaultdict(list)
+        now = timezone.now()
 
-        if (
-            self._state.adding
-            and self.start_at is not None
-            and self.start_at <= timezone.now()
-        ):
+        # TODO If model is loaded with `.only()` and `start_at` isn't included, this throws a KeyError.
+        if not self._state.adding and self._loaded_values["start_at"] <= now:
+            for field in self._meta.concrete_fields:
+                changed = getattr(self, field.attname) != self._loaded_values.get(
+                    field.attname
+                )
+
+                if field.attname != "name" and changed:
+                    errors[field.name].append(
+                        ValidationError(
+                            f"'{field.name}' is not editable after start",
+                            "locked_after_start",
+                        )
+                    )
+
+        if self._state.adding and self.start_at is not None and self.start_at <= now:
             errors["start_at"].append(
                 ValidationError("'start_at' must be in the future", "datetime_in_past")
             )
