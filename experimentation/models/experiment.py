@@ -61,7 +61,7 @@ class Experiment(models.Model):
         if (
             self._state.adding
             and self.start_at is not None
-            and self.start_at < timezone.now()
+            and self.start_at <= timezone.now()
         ):
             errors["start_at"].append(
                 ValidationError("'start_at' must be in the future", "datetime_in_past")
