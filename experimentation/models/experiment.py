@@ -56,12 +56,12 @@ class Experiment(models.Model):
             and self.start_at < timezone.now()
         ):
             errors["start_at"].append(
-                ValidationError("'start_at' must be in the future")
+                ValidationError("'start_at' must be in the future", "datetime_in_past")
             )
 
         if self.start_at and self.end_at and self.end_at <= self.start_at:
             errors[NON_FIELD_ERRORS].append(
-                ValidationError("'end_at' must be after 'start_at'")
+                ValidationError("'end_at' must be after 'start_at'", "end_before_start")
             )
 
         # Check for any other experiments with an overlapping start/end range.
@@ -79,7 +79,10 @@ class Experiment(models.Model):
             .exists()
         ):
             errors[NON_FIELD_ERRORS].append(
-                ValidationError("This experiment overlaps with another experiment.")
+                ValidationError(
+                    "This experiment overlaps with another experiment.",
+                    "experiment_overlap",
+                )
             )
 
         if errors:
