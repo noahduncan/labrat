@@ -1,9 +1,11 @@
 from collections import defaultdict
-from typing import ClassVar
+from collections.abc import Collection
+from typing import Any, ClassVar, Self
 
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models.fetch_modes import FetchMode
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -11,6 +13,8 @@ from .feature_flag import FeatureFlag
 
 
 class Experiment(models.Model):
+    _loaded_values: dict[str, Any]
+
     feature_flag = models.ForeignKey(FeatureFlag, on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, unique=True, editable=False)
@@ -46,6 +50,10 @@ class Experiment(models.Model):
         # TODO Consider moving to service layer to prevent duplicate calls in some cases.
         self.full_clean()
         super().save(*args, **kwargs)
+        self._loaded_values = self._current_values()
+
+    def _current_values(self) -> dict[str, Any]:
+        return {f.attname: getattr(self, f.attname) for f in self._meta.concrete_fields}
 
     def clean(self):
         errors = defaultdict(list)
@@ -87,3 +95,16 @@ class Experiment(models.Model):
 
         if errors:
             raise ValidationError(errors)
+
+    @classmethod
+    def from_db(
+        cls,
+        db: str | None,
+        field_names: Collection[str],
+        values: Collection[Any],
+        *,
+        fetch_mode: FetchMode | None = None,
+    ) -> Self:
+        instance = super().from_db(db, field_names, values, fetch_mode=fetch_mode)
+        instance._loaded_values = dict(zip(field_names, values))
+        return instance
