@@ -136,3 +136,8 @@ class ExperimentTest(TestCase):
         self.assertEqual(
             cm.exception.error_dict["start_at"][0].code, "datetime_in_past"
         )
+
+    def test_experiment_start_at_must_be_before_end_at(self):
+        with self.assertRaises(ValidationError) as cm:
+            make_experiment(start_at=self.now, end_at=self.now - timedelta(days=1))
+        self.assertEqual(cm.exception.error_dict["__all__"][0].code, "end_before_start")
