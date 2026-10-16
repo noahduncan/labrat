@@ -17,6 +17,7 @@ labrat-client = { workspace = true }
 [dependency-groups]
 dev = [
     "django-stubs>=6.1.2",
+    "pyrefly>=1.4.0",
     "pytest>=9.1.1",
     "pytest-django>=4.14.0",
     "pytest-watcher>=0.6.3",
@@ -33,3 +34,9 @@ extend-select = ["DJ"]
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "labrat.settings"
 #testpaths=["packages"]
+
+[tool.pyrefly]
+project-includes = [
+    "**/*.py*",
+    "**/*.ipynb",
+]
