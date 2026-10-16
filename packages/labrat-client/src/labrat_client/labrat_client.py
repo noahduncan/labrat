@@ -86,7 +86,7 @@ class LabratClient:
         TODO At scale: pub/sub rather than polled.
         """
         try:
-            r = requests.get(self.base_url + "/config", timeout=timeout)
+            r = requests.get(self.base_url + "/config", timeout=timeout)  # pyrefly: ignore
             r.raise_for_status()
             return self.parse_config(r.json())
         except requests.RequestException as e:

@@ -31,7 +31,7 @@ def snapshot(now: datetime | None = None):
                         "start_at": e.start_at,
                         "end_at": e.end_at,
                     }
-                    for e in f.current_experiments
+                    for e in f.current_experiments  # pyrefly: ignore
                 ],
             }
             for f in flags
