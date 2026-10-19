@@ -5,8 +5,7 @@ from django.test.testcases import TestCase
 
 from experimentation.models import FeatureFlag
 from experimentation.services.config import snapshot
-
-from .test_experiment import make_experiment
+from experimentation.tests.unit.models.test_experiment import make_experiment
 
 SETUP_TIME = datetime(2026, 10, 1, tzinfo=UTC)
 
