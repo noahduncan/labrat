@@ -1,7 +1,7 @@
 import warnings
 from datetime import UTC, datetime
 
-from labrat_client.bucketing import bucket_for
+from labrat_client import bucketing
 from labrat_client.exceptions import LabratWarning
 
 
@@ -34,10 +34,8 @@ def evaluate(
 
     for experiment in experiments:
         if experiment["start_at"] <= now < experiment["end_at"]:
-            variant = (
-                "control"
-                if bucket_for(experiment["slug"], user_id) < experiment["control"]
-                else "treatment"
+            variant = bucketing.variant_for(
+                experiment["slug"], experiment["control"], user_id
             )
             enabled = flag["enabled"] if variant == "control" else not flag["enabled"]
             return FlagResult(enabled, experiment["slug"], variant)
