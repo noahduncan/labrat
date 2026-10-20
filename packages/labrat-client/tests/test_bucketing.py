@@ -8,11 +8,11 @@ EXPECTED_BUCKETS = [
 ]
 
 
-@mark.parametrize(("flag_name", "user_id", "expected_bucket"), EXPECTED_BUCKETS)
+@mark.parametrize(("experiment_slug", "user_id", "expected_bucket"), EXPECTED_BUCKETS)
 def test_bucket_for_is_deterministic(
-    flag_name: str, user_id: int, expected_bucket: int
+    experiment_slug: str, user_id: int, expected_bucket: int
 ):
-    assert bucket_for(flag_name, str(user_id)) == expected_bucket
+    assert bucket_for(experiment_slug, str(user_id)) == expected_bucket
 
 
 def test_bucket_for_changes_bucket_for_different_inputs():
