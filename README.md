@@ -79,6 +79,12 @@ flowchart LR
   * Guardrail metrics (requires the system has awareness of real-time metrics)
   * Ramp-up (release experiment to an increasing % of subjects growing at a cadence)
 * Build a single contract to enforce server/client data consistency
+  1. Shared `labrat-core` workspace package (no dependencies) holding the `Variant` enum, bucketing, and payload
+     shapes. Server and client both depend on it, rather than the server depending on `labrat-client`.
+  2. Server sends variant names/weights in the config snapshot, making it the runtime source of truth (pairs with A/B/n
+     variants). `labrat-core` keeps only the hashing algorithm.
+  3. Shared test vectors (`(slug, subject) -> bucket` fixtures) that every client implementation must pass, enabling
+     non-Python SDKs.
 * Add an MCP server to allow agents to interact with experiments / data sets
 * Convert to PostgreSQL
     * Add additional constraints to data (tstzrange on start/end)
