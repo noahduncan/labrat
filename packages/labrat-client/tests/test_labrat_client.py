@@ -1,6 +1,6 @@
 import logging
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -10,6 +10,13 @@ from labrat_client.labrat_client import LabratClient
 TEST_URL = "http://labrat.test"
 
 
+# Ensure all tests in this file use responses so no actual HTTP requests are made.
+@pytest.fixture(autouse=True)
+def _mock_requests():
+    with responses.mock:
+        yield
+
+
 @pytest.fixture
 def client():
     c = LabratClient(TEST_URL, poll_interval=3600)
@@ -17,14 +24,12 @@ def client():
     c.stop_polling()
 
 
-@responses.activate
 def test_labrat_client_init_raises_when_no_url():
     with pytest.raises(ValueError) as e:
         LabratClient(None)
     assert str(e.value) == "Labrat URL not set"
 
 
-@responses.activate
 def test_labrat_client_init_falls_back_to_env_var(monkeypatch):
     monkeypatch.setenv("LABRAT_URL", TEST_URL)
     c = LabratClient(None)
@@ -33,7 +38,6 @@ def test_labrat_client_init_falls_back_to_env_var(monkeypatch):
     assert c._thread is None
 
 
-@responses.activate
 def test_labrat_client_fetch_config_not_called_for_every_operation(client):
     with patch.object(
         client,
@@ -46,7 +50,6 @@ def test_labrat_client_fetch_config_not_called_for_every_operation(client):
     fake.assert_called_once()
 
 
-@responses.activate
 def test_labrat_client_warns_on_500_from_server(client, caplog):
     caplog.set_level(logging.WARNING)
 
@@ -66,7 +69,6 @@ def test_labrat_client_warns_on_500_from_server(client, caplog):
     assert client.config == {"test": {"enabled": True, "experiments": []}}
 
 
-@responses.activate
 def test_labrat_client_warns_on_malformed_response(client, caplog):
     caplog.set_level(logging.WARNING)
 
@@ -86,7 +88,6 @@ def test_labrat_client_warns_on_malformed_response(client, caplog):
     assert client.config == {"test": {"enabled": True, "experiments": []}}
 
 
-@responses.activate
 def test_labrat_client__refresh_sets_config(client):
     resp = responses.Response(
         method="GET",
@@ -100,7 +101,6 @@ def test_labrat_client__refresh_sets_config(client):
     assert client.config == {"test": {"enabled": True, "experiments": []}}
 
 
-@responses.activate
 def test_labrat_client_is_flag_on_returns_default_on_fetch_config_failure(client):
     resp = responses.Response(
         method="GET",
@@ -115,7 +115,6 @@ def test_labrat_client_is_flag_on_returns_default_on_fetch_config_failure(client
     assert result == default_flag_state
 
 
-@responses.activate
 def test_labrat_client_stop_polling_ends_thread(client):
     resp = responses.Response(
         method="GET",
@@ -135,7 +134,6 @@ def test_labrat_client_stop_polling_ends_thread(client):
     assert not client._thread.is_alive()
 
 
-@responses.activate
 def test_labrat_client_stop_polling_doesnt_raise_when_thread_not_started(client):
     client.stop_polling()
 
@@ -167,7 +165,6 @@ def test_labrat_client_parse_config_converts_isodatetime_stamps(client):
     )
 
 
-@responses.activate
 def test_labrat_client_fetch_config_called_in_thread():
     """
     The first fetch happens synchronously in _ensure_started on this thread, so any
@@ -204,3 +201,131 @@ def test_labrat_client_fetch_config_called_in_thread():
 
     # The poller may fetch more than once before it stops, so this is a minimum.
     assert mock_fetch.call_count >= 2
+
+
+def test_labrat_client_records_exposure_when_active_experiment(client):
+    client.config = {
+        "test": {
+            "enabled": True,
+            "experiments": [
+                {
+                    "slug": "test_experiment",
+                    "start_at": datetime.now(UTC) - timedelta(days=1),
+                    "end_at": datetime.now(UTC) + timedelta(days=1),
+                    "control": 50,
+                }
+            ],
+        }
+    }
+
+    client.is_flag_on("test", "1")
+    assert client._exposures.qsize() == 1
+    assert client._exposures.get_nowait()["experiment"] == "test_experiment"
+
+
+def test_labrat_client_does_not_record_exposure_when_no_active_experiment(client):
+    client.config = {
+        "test": {
+            "enabled": True,
+            "experiments": [
+                {
+                    "slug": "test_experiment",
+                    "start_at": datetime.now(UTC) + timedelta(days=1),
+                    "end_at": datetime.now(UTC) + timedelta(days=3),
+                    "control": 50,
+                }
+            ],
+        }
+    }
+
+    client.is_flag_on("test", "1")
+    assert client._exposures.qsize() == 0
+
+
+def test_labrat_client_is_flag_on_only_adds_one_exposure_per_experiment_subject_pair(
+    client,
+):
+    client.config = {
+        "test": {
+            "enabled": True,
+            "experiments": [
+                {
+                    "slug": "test_experiment",
+                    "start_at": datetime.now(UTC) - timedelta(days=1),
+                    "end_at": datetime.now(UTC) + timedelta(days=3),
+                    "control": 50,
+                },
+            ],
+        },
+        "test2": {
+            "enabled": True,
+            "experiments": [
+                {
+                    "slug": "test_experiment2",
+                    "start_at": datetime.now(UTC) - timedelta(days=1),
+                    "end_at": datetime.now(UTC) + timedelta(days=3),
+                    "control": 50,
+                },
+            ],
+        },
+    }
+
+    client.is_flag_on("test", "1")
+    client.is_flag_on("test", "1")
+    assert len(client._exposure_pairs) == 1
+    assert client._exposures.qsize() == 1
+
+    client.is_flag_on("test2", "1")
+    client.is_flag_on("test2", "1")
+    assert len(client._exposure_pairs) == 2
+    assert client._exposures.qsize() == 2
+
+
+def test_labrat_client_queue_overrun_logging(caplog):
+    caplog.set_level(logging.WARNING)
+    client = LabratClient(TEST_URL, poll_interval=3600, queue_maxsize=1)
+    client.stop_polling()
+    client.config = {
+        "test": {
+            "enabled": True,
+            "experiments": [
+                {
+                    "slug": "test_experiment",
+                    "start_at": datetime.now(UTC) - timedelta(days=1),
+                    "end_at": datetime.now(UTC) + timedelta(days=3),
+                    "control": 50,
+                },
+            ],
+        },
+        "test2": {
+            "enabled": True,
+            "experiments": [
+                {
+                    "slug": "test_experiment2",
+                    "start_at": datetime.now(UTC) - timedelta(days=1),
+                    "end_at": datetime.now(UTC) + timedelta(days=3),
+                    "control": 50,
+                },
+            ],
+        },
+    }
+
+    client.is_flag_on("test", "1")
+    client.is_flag_on("test2", "1")
+    client.is_flag_on("test2", "1")
+
+    assert client._exposures.qsize() == 1
+    assert len(client._exposure_pairs) == 1
+    assert client._drop_count == 2
+    assert caplog.text.count("Exposure queue full, dropping exposure reports.") == 1
+
+    client._exposures.get_nowait()
+
+    client.is_flag_on("test2", "1")
+    assert client._drop_count == 0
+    assert len(client._exposure_pairs) == 2
+    assert ("test_experiment2", "1") in client._exposure_pairs
+    assert (
+        caplog.text.count("Exposure queue healthy again, discarded 2 exposure reports.")
+        == 1
+    )

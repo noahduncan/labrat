@@ -1,7 +1,9 @@
 import logging
 import os
+import queue
 import threading
-from datetime import datetime
+from datetime import UTC, datetime
+from typing import Any
 
 import requests
 
@@ -22,12 +24,24 @@ class LabratClient:
     TODO - Authentication
     """
 
-    def __init__(self, base_url: str | None = None, poll_interval: float = 30.0):
+    def __init__(
+        self,
+        base_url: str | None = None,
+        poll_interval: float = 30.0,
+        queue_maxsize: int = 1000,
+    ):
         self.base_url = base_url or os.environ.get("LABRAT_URL")
         if not self.base_url:
             raise ValueError("Labrat URL not set")
 
-        self.config = None
+        self.config: None | dict[str, dict[str, bool | list[dict[str, Any]]]] = None
+        # TODO make exposure data tracking thread safe
+        # TODO add TTL to _exposure_pairs to remove memory leak
+        self._exposures: queue.Queue[dict[str, Any]] = queue.Queue(
+            maxsize=queue_maxsize
+        )
+        self._exposure_pairs: set[tuple[str, str]] = set()
+        self._drop_count = 0
 
         self._poll_interval = poll_interval
         self._stop = threading.Event()
@@ -101,4 +115,36 @@ class LabratClient:
             return default
 
         flag_result = flags.evaluate(self.config, flag_name, user_id, default=default)
+
+        if flag_result.experiment_slug is not None and flag_result.variant is not None:
+            self.record_exposure(
+                experiment_slug=flag_result.experiment_slug,
+                subject=user_id,
+                variant=flag_result.variant,
+            )
         return flag_result.enabled
+
+    def record_exposure(self, *, experiment_slug: str, subject: str, variant: str):
+        if (experiment_slug, subject) in self._exposure_pairs:
+            return
+
+        try:
+            self._exposures.put_nowait(
+                {
+                    "experiment": experiment_slug,
+                    "subject": subject,
+                    "variant": variant,
+                    "exposed_at": datetime.now(UTC),
+                }
+            )
+            self._exposure_pairs.add((experiment_slug, subject))
+            if self._drop_count > 0:
+                logger.warning(
+                    "Exposure queue healthy again, discarded %d exposure reports.",
+                    self._drop_count,
+                )
+                self._drop_count = 0
+        except queue.Full:
+            if self._drop_count == 0:
+                logger.warning("Exposure queue full, dropping exposure reports.")
+            self._drop_count += 1
