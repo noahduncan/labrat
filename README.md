@@ -143,7 +143,6 @@ Exposure Table:
 
 * id
 * created_at
-* feature_flag_id
 * experiment_id
 * subject
 * variant
@@ -153,7 +152,6 @@ Exposure Table:
 
 * exposed_at
 * experiment_id (slug?)
-* feature_flag_id
 * subject_id
 * variant
 
