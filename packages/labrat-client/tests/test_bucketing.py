@@ -1,4 +1,3 @@
-
 from labrat_client.bucketing import bucket_for, variant_for
 from pytest import mark
 
@@ -36,5 +35,5 @@ def test_bucket_for_result_is_in_range():
 
 
 @mark.parametrize(("experiment_slug", "user_id", "expected_variant"), EXPECTED_VARIANTS)
-def test_variant_for(experiment_slug: str, user_id: str, expected_variant: int):
+def test_variant_for(experiment_slug: str, user_id: str, expected_variant: str):
     assert variant_for(experiment_slug, 50, user_id) == expected_variant
