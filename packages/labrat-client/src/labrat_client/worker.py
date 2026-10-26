@@ -12,7 +12,7 @@ class Worker:
 
     def start(self, before: Callable[[], None] | None = None) -> None:
         # optimize- if the thread is running, skip getting a lock
-        if self.is_alive():
+        if self.is_alive() or self._stop.is_set():
             return
         with self._lock:
             # Double check that the thread didn't start running while we obtained a lock
