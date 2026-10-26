@@ -33,6 +33,7 @@ extend-select = ["DJ"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "labrat.settings"
+filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
 
 [tool.pyrefly]
 project-includes = [

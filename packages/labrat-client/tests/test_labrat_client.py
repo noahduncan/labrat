@@ -21,7 +21,7 @@ def _mock_requests():
 def client():
     c = LabratClient(TEST_URL, poll_interval=3600)
     yield c
-    c.stop_polling()
+    c._poller.stop()
 
 
 def test_labrat_client_init_raises_when_no_url():
@@ -35,7 +35,7 @@ def test_labrat_client_init_falls_back_to_env_var(monkeypatch):
     c = LabratClient(None)
     assert c.base_url == TEST_URL
     assert not responses.calls
-    assert c._thread is None
+    assert c._poller._thread is None
 
 
 def test_labrat_client_fetch_config_not_called_for_every_operation(client):
@@ -111,33 +111,8 @@ def test_labrat_client_is_flag_on_returns_default_on_fetch_config_failure(client
     responses.add(resp)
     default_flag_state = True
     result = client.is_flag_on("test", "1", default_flag_state)
-    assert client._thread.is_alive()
+    assert client._poller.is_alive()
     assert result == default_flag_state
-
-
-def test_labrat_client_stop_polling_ends_thread(client):
-    resp = responses.Response(
-        method="GET",
-        url=TEST_URL + "/config",
-        status=200,
-        json={"flags": {"test": {"enabled": True, "experiments": []}}},
-    )
-    responses.add(resp)
-
-    client._ensure_started()
-    client.stop_polling()
-
-    assert not client._thread.is_alive()
-
-    # Cannot start the thread again after manual stop
-    client._ensure_started()
-    assert not client._thread.is_alive()
-
-
-def test_labrat_client_stop_polling_doesnt_raise_when_thread_not_started(client):
-    client.stop_polling()
-
-    assert client._thread is None
 
 
 def test_labrat_client_parse_config_converts_isodatetime_stamps(client):
@@ -197,7 +172,7 @@ def test_labrat_client_fetch_config_called_in_thread():
         finally:
             # Stop before the patch is removed so the thread never calls the real
             # fetch_config.
-            client.stop_polling()
+            client._poller.stop()
 
     # The poller may fetch more than once before it stops, so this is a minimum.
     assert mock_fetch.call_count >= 2
@@ -284,7 +259,7 @@ def test_labrat_client_is_flag_on_only_adds_one_exposure_per_experiment_subject_
 def test_labrat_client_queue_overrun_logging(caplog):
     caplog.set_level(logging.WARNING)
     client = LabratClient(TEST_URL, poll_interval=3600, queue_maxsize=1)
-    client.stop_polling()
+    client._poller.stop()
     client.config = {
         "test": {
             "enabled": True,

@@ -13,6 +13,7 @@ from labrat_client.exceptions import (
     LabratConnectionError,
     LabratError,
 )
+from labrat_client.worker import Worker
 
 logger = logging.getLogger(__name__)
 
@@ -43,34 +44,14 @@ class LabratClient:
         self._exposure_pairs: set[tuple[str, str]] = set()
         self._drop_count = 0
 
+        self._poller = Worker(self._poll, "labrat-poller")
         self._poll_interval = poll_interval
-        self._stop = threading.Event()
-        self._lock = threading.Lock()
-        self._thread = None
 
     def _ensure_started(self):
-        # optimize- if the thread is running, skip getting a lock: no risk of starting multiple threads.
-        if self._thread is not None and self._thread.is_alive():
-            return
-        with self._lock:
-            # Double check that the thread didn't start running while we obtained a lock
-            if self._thread is not None and self._thread.is_alive():
-                return
-            # Don't start polling if polling was manually stopped.
-            if self._stop.is_set():
-                return
-            # poll now and initiate a thread to poll in the background
-            self._refresh(timeout=1)
-            self._thread = threading.Thread(target=self._poll, daemon=True)
-            self._thread.start()
+        self._poller.start(before=lambda: self._refresh(timeout=1))
 
-    def stop_polling(self):
-        self._stop.set()
-        if self._thread is not None and self._thread.is_alive():
-            self._thread.join()
-
-    def _poll(self):
-        while not self._stop.wait(self._poll_interval):
+    def _poll(self, stop_event: threading.Event) -> None:
+        while not stop_event.wait(self._poll_interval):
             self._refresh()
 
     def _refresh(self, timeout: float = 5):
