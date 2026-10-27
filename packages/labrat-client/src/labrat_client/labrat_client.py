@@ -89,6 +89,15 @@ class LabratClient:
         except (KeyError, ValueError, TypeError) as e:
             raise LabratConfigError(f"Could not parse config: {e}") from e
 
+    def close(self) -> None:
+        """
+        Stops background polling. Calling stop multiple times is harmless.
+
+        Calling is_flag_on() after calling close() will use the cached copy of the server config.
+        :return:
+        """
+        self._poller.stop()
+
     def is_flag_on(self, flag_name: str, user_id: str, default: bool = False) -> bool:
         self._ensure_started()
         # In case we haven't successfully connected to the server, return the default.

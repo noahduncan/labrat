@@ -21,7 +21,7 @@ def _mock_requests():
 def client():
     c = LabratClient(TEST_URL, poll_interval=3600)
     yield c
-    c._poller.stop()
+    c.close()
 
 
 def test_labrat_client_init_raises_when_no_url():
@@ -172,7 +172,7 @@ def test_labrat_client_fetch_config_called_in_thread():
         finally:
             # Stop before the patch is removed so the thread never calls the real
             # fetch_config.
-            client._poller.stop()
+            client.close()
 
     # The poller may fetch more than once before it stops, so this is a minimum.
     assert mock_fetch.call_count >= 2
@@ -259,7 +259,7 @@ def test_labrat_client_is_flag_on_only_adds_one_exposure_per_experiment_subject_
 def test_labrat_client_queue_overrun_logging(caplog):
     caplog.set_level(logging.WARNING)
     client = LabratClient(TEST_URL, poll_interval=3600, queue_maxsize=1)
-    client._poller.stop()
+    client.close()  # close client here so we can set and use a cached config and kill our running thread.
     client.config = {
         "test": {
             "enabled": True,
