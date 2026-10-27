@@ -1,6 +1,7 @@
 import logging
 import threading
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -18,21 +19,40 @@ def _mock_requests():
 
 
 @pytest.fixture
-def client():
-    c = LabratClient(TEST_URL, poll_interval=3600)
-    yield c
-    c.close()
+def make_client():
+    clients = []
+
+    def _make(**overrides: Any) -> LabratClient:
+        overrides.setdefault("base_url", TEST_URL)
+        overrides.setdefault("poll_interval", 3600)
+
+        client = LabratClient(**overrides)
+        clients.append(client)
+        return client
+
+    yield _make
+
+    for c in clients:
+        c.close()
 
 
-def test_labrat_client_init_raises_when_no_url():
+@pytest.fixture
+def client(make_client):
+    """
+    A LabratClient instance with the common configuration for tests.
+    """
+    return make_client()
+
+
+def test_labrat_client_init_raises_when_no_url(make_client):
     with pytest.raises(ValueError) as e:
-        LabratClient(None)
+        make_client(base_url=None)
     assert str(e.value) == "Labrat URL not set"
 
 
-def test_labrat_client_init_falls_back_to_env_var(monkeypatch):
+def test_labrat_client_init_falls_back_to_env_var(make_client, monkeypatch):
     monkeypatch.setenv("LABRAT_URL", TEST_URL)
-    c = LabratClient(None)
+    c = make_client(base_url=None)
     assert c.base_url == TEST_URL
     assert not responses.calls
     assert c._poller._thread is None
@@ -140,7 +160,7 @@ def test_labrat_client_parse_config_converts_isodatetime_stamps(client):
     )
 
 
-def test_labrat_client_fetch_config_called_in_thread():
+def test_labrat_client_fetch_config_called_in_thread(make_client):
     """
     The first fetch happens synchronously in _ensure_started on this thread, so any
     later fetch can only have come from the background polling thread.
@@ -152,7 +172,7 @@ def test_labrat_client_fetch_config_called_in_thread():
 
     If nothing else, it was an interesting exercise academically.
     """
-    client = LabratClient(TEST_URL, poll_interval=0.01)
+    client = make_client(poll_interval=0.01)
     fetched_twice = threading.Event()
     fetch_count = 0
 
@@ -256,10 +276,9 @@ def test_labrat_client_is_flag_on_only_adds_one_exposure_per_experiment_subject_
     assert client._exposures.qsize() == 2
 
 
-def test_labrat_client_queue_overrun_logging(caplog):
+def test_labrat_client_queue_overrun_logging(make_client, caplog):
     caplog.set_level(logging.WARNING)
-    client = LabratClient(TEST_URL, poll_interval=3600, queue_maxsize=1)
-    client.close()  # close client here so we can set and use a cached config and kill our running thread.
+    client = make_client(queue_maxsize=1)
     client.config = {
         "test": {
             "enabled": True,
