@@ -1,6 +1,5 @@
 import json
 import logging
-import threading
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -185,38 +184,18 @@ def test_labrat_client_fetch_config_called_in_thread(make_client):
     """
     The first fetch happens synchronously in _ensure_started on this thread, so any
     later fetch can only have come from the background polling thread.
-
-    This is maybe over designed here with the guidance of claude. We're using threading
-    in order to do two things: 1. end the polling after 2+ polls and 2. end the test if it takes 1s+ to get 2+ polls.
-    A call count and a timeout is probably sufficient, but this prevents brittleness on a busy server where two calls
-    takes significantly longer than normal.
-
-    If nothing else, it was an interesting exercise academically.
     """
     client = make_client(poll_interval=0.01)
-    fetched_twice = threading.Event()
-    fetch_count = 0
 
-    def fake_fetch(*args, **kwargs):
-        nonlocal fetch_count
-        fetch_count += 1
-        if fetch_count >= 2:
-            # Signal the waiting test thread that the poller has fetched.
-            fetched_twice.set()
-        return {"test": {"enabled": True, "experiments": []}}
-
-    with patch.object(client, "fetch_config", side_effect=fake_fetch) as mock_fetch:
+    with patch.object(client, "fetch_config", return_value={}) as mock_fetch:
         try:
             client.is_flag_on("test", "1")
-            # Block until the poller fetches, failing if it hasn't within a second.
-            assert fetched_twice.wait(timeout=1)
+            # The poller may fetch more than once before it stops, so this is a minimum.
+            assert wait_until(lambda: mock_fetch.call_count >= 2)
         finally:
             # Stop before the patch is removed so the thread never calls the real
             # fetch_config.
             client.close()
-
-    # The poller may fetch more than once before it stops, so this is a minimum.
-    assert mock_fetch.call_count >= 2
 
 
 def test_labrat_client_records_exposure_when_active_experiment(make_client):
