@@ -2,6 +2,7 @@ import logging
 import os
 import queue
 import threading
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -143,15 +144,37 @@ class LabratClient:
         except (KeyError, ValueError, TypeError) as e:
             raise LabratConfigError(f"Could not parse config: {e}") from e
 
-    def close(self) -> None:
+    def close(self, timeout: float = 2) -> None:
         """
-        Stops background polling. Calling stop multiple times is harmless.
+        Stops background polling and exposure sending. Exposures already queued when
+        close() is called will be flushed before stopping the sender thread. Calling
+        close() multiple times is harmless.
 
-        Calling is_flag_on() after calling close() will use the cached copy of the server config.
-        :return:
+        NOTEs:
+            1. Calling is_flag_on() after calling close() will use the cached copy of
+               the server config.
+            2. timeout is a soft limit that bounds how long close will wait for the
+               queue to flush. If sending an exposure takes longer than the timeout,
+               this function would also take longer to finish.
         """
         self._poller.stop()
+
+        sender_close_deadline = time.monotonic() + timeout
+        while (
+            self._sender.is_alive()
+            and self._exposures.qsize() > 0
+            and time.monotonic() < sender_close_deadline
+        ):
+            time.sleep(0.1)
+
         self._sender.stop()
+
+        if self._exposures.qsize() > 0:
+            logger.warning(
+                "Exposure queue did not flush within %s seconds, dropping %d exposures.",
+                timeout,
+                self._exposures.qsize(),
+            )
 
     def is_flag_on(self, flag_name: str, user_id: str, default: bool = False) -> bool:
         self._ensure_started()
