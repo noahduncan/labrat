@@ -58,10 +58,11 @@ def client(make_client):
     return make_client()
 
 
-def wait_until(condition: Callable[[], object], timeout: float = 1) -> None:
+def wait_until(condition: Callable[[], object], timeout: float = 1) -> bool:
     deadline = time.monotonic() + timeout
     while not condition() and time.monotonic() < deadline:
         time.sleep(0.01)
+    return bool(condition())
 
 
 def test_labrat_client_init_raises_when_no_url(make_client):
@@ -366,7 +367,7 @@ def test_labrat_client_sender_posts_queued_exposure(client, caplog):
     responses.post(url=TEST_URL + "/api/v1/experiment/record-exposure", status=200)
     client._exposures.put(EXPOSURE_DATA)
 
-    wait_until(lambda: responses.calls)
+    assert wait_until(lambda: responses.calls)
     client._sender.stop()
 
     assert len(responses.calls) == 1
@@ -418,7 +419,5 @@ def test_labrat_client_record_exposure_exception_logs_warning_and_thread_survive
         )
 
         # Two calls means that the thread survived the first failure.
-        wait_until(lambda: cm.call_count == 2)
-
-        assert cm.call_count == 2
+        assert wait_until(lambda: cm.call_count == 2)
         assert caplog.text.count("Unexpected error sending exposure") == 1
