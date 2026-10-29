@@ -18,6 +18,18 @@ from labrat_client.worker import Worker
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, kw_only=True)
+class Exposure:
+    """
+    Required fields to send an exposure
+    """
+
+    experiment: str
+    subject: str
+    variant: str
+    exposed_at: datetime
+
+
 class LabratClient:
     """
     Client for talking to the labrat server
@@ -39,9 +51,7 @@ class LabratClient:
         self.config: None | dict[str, dict[str, bool | list[dict[str, Any]]]] = None
         # TODO make exposure data tracking thread safe
         # TODO add TTL to _exposure_pairs to remove memory leak
-        self._exposures: queue.Queue[dict[str, Any]] = queue.Queue(
-            maxsize=queue_maxsize
-        )
+        self._exposures: queue.Queue[Exposure] = queue.Queue(maxsize=queue_maxsize)
         self._exposure_pairs: set[tuple[str, str]] = set()
         self._drop_count = 0
 
@@ -120,14 +130,13 @@ class LabratClient:
             return
 
         try:
-            self._exposures.put_nowait(
-                {
-                    "experiment": experiment_slug,
-                    "subject": subject,
-                    "variant": variant,
-                    "exposed_at": datetime.now(UTC),
-                }
+            exposure = Exposure(
+                experiment=experiment_slug,
+                subject=subject,
+                variant=variant,
+                exposed_at=datetime.now(UTC),
             )
+            self._exposures.put_nowait(exposure)
             self._exposure_pairs.add((experiment_slug, subject))
             if self._drop_count > 0:
                 logger.warning(

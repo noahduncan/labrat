@@ -215,7 +215,7 @@ def test_labrat_client_records_exposure_when_active_experiment(client):
 
     client.is_flag_on("test", "1")
     assert client._exposures.qsize() == 1
-    assert client._exposures.get_nowait()["experiment"] == "test_experiment"
+    assert client._exposures.get_nowait().experiment == "test_experiment"
 
 
 def test_labrat_client_does_not_record_exposure_when_no_active_experiment(client):
