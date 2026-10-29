@@ -2,6 +2,7 @@ import logging
 import os
 import queue
 import threading
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -58,6 +59,23 @@ class LabratClient:
         self._poller = Worker(self._poll, "labrat-poller")
         self._poll_interval = poll_interval
 
+        self._sender = Worker(self._send_queued, "labrat-sender")
+        self._sender.start()
+
+    def _send_queued(self, stop_event: threading.Event) -> None:
+        while not stop_event.is_set():
+            try:
+                event = self._exposures.get(timeout=0.1)
+            except queue.Empty:
+                continue
+
+            try:
+                self._send_exposure(event)
+            except LabratConnectionError:
+                logger.warning("Could not transmit exposure. Dropping.")
+            except Exception:
+                logger.warning("Unexpected error sending exposure", exc_info=True)
+
     def _ensure_started(self):
         self._poller.start(before=lambda: self._refresh(timeout=1))
 
@@ -72,6 +90,28 @@ class LabratClient:
             logger.warning("Config refresh failed: %s", e)
         except Exception:
             logger.warning("Unexpected error during config refresh", exc_info=True)
+
+    def _send_exposure(self, event: Exposure, *, timeout: float = 5) -> None:
+        """
+        Send an exposure report to the server.
+        """
+        payload = {
+            "experiment": event.experiment,
+            "subject": event.subject,
+            "variant": event.variant,
+            "exposed_at": event.exposed_at.isoformat(),
+        }
+
+        try:
+            # TODO add retry / backoff
+            r = requests.post(
+                self.base_url + "/api/v1/experiment/record-exposure",
+                json=payload,
+                timeout=timeout,
+            )
+            r.raise_for_status()
+        except requests.RequestException as e:
+            raise LabratConnectionError(f"Could not send exposure: {e}") from e
 
     @staticmethod
     def parse_config(config: dict) -> dict:
@@ -111,6 +151,7 @@ class LabratClient:
         :return:
         """
         self._poller.stop()
+        self._sender.stop()
 
     def is_flag_on(self, flag_name: str, user_id: str, default: bool = False) -> bool:
         self._ensure_started()
