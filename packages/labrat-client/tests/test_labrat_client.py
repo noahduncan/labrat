@@ -400,3 +400,46 @@ def test_labrat_client_record_exposure_exception_logs_warning_and_thread_survive
         # Two calls means that the thread survived the first failure.
         assert wait_until(lambda: cm.call_count == 2)
         assert caplog.text.count("Unexpected error sending exposure") == 1
+
+
+def test_labrat_client_close_ends_all_background_threads(client):
+    with patch.object(client, "fetch_config", return_value={}):
+        client._ensure_started()
+
+        assert client._poller.is_alive()
+        assert client._sender.is_alive()
+
+        client.close()
+
+        assert not client._poller.is_alive()
+        assert not client._sender.is_alive()
+
+
+def test_labrat_client_close_warns_if_queue_times_out(client, caplog):
+    caplog.set_level(logging.WARNING)
+    timeout = 0.1
+
+    with patch.object(client, "_send_exposure", side_effect=lambda _: time.sleep(0.2)):
+        client._exposures.put(EXPOSURE_DATA)
+        client._exposures.put(EXPOSURE_DATA)
+
+        assert wait_until(lambda: client._exposures.qsize() == 1)
+
+        client.close(timeout)
+
+        assert (
+            f"Exposure queue did not flush within {timeout} seconds, dropping 1 exposures."
+            in caplog.text
+        )
+
+
+def test_labrat_client_close_flushes_remaining_queued_exposures(client):
+    responses.post(url=TEST_URL + "/api/v1/experiment/record-exposure", status=200)
+
+    client._exposures.put(EXPOSURE_DATA)
+    client._exposures.put(EXPOSURE_DATA)
+
+    client.close()
+
+    assert len(responses.calls) == 2
+    assert client._exposures.qsize() == 0
