@@ -31,9 +31,10 @@ class LabratClient:
         poll_interval: float = 30.0,
         queue_maxsize: int = 1000,
     ):
-        self.base_url = base_url or os.environ.get("LABRAT_URL")
-        if not self.base_url:
+        base_url = base_url or os.environ.get("LABRAT_URL")
+        if not base_url:
             raise ValueError("Labrat URL not set")
+        self.base_url: str = base_url
 
         self.config: None | dict[str, dict[str, bool | list[dict[str, Any]]]] = None
         # TODO make exposure data tracking thread safe
@@ -81,7 +82,7 @@ class LabratClient:
         TODO At scale: pub/sub rather than polled.
         """
         try:
-            r = requests.get(self.base_url + "/config", timeout=timeout)  # pyrefly: ignore
+            r = requests.get(self.base_url + "/config", timeout=timeout)
             r.raise_for_status()
             return self.parse_config(r.json())
         except requests.RequestException as e:
