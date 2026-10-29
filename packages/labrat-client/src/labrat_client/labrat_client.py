@@ -94,9 +94,12 @@ class LabratClient:
         try:
             r = requests.get(self.base_url + "/config", timeout=timeout)
             r.raise_for_status()
-            return self.parse_config(r.json())
+            data = r.json()
         except requests.RequestException as e:
             raise LabratConnectionError(f"Could not fetch config: {e}") from e
+
+        try:
+            return self.parse_config(data)
         except (KeyError, ValueError, TypeError) as e:
             raise LabratConfigError(f"Could not parse config: {e}") from e
 
