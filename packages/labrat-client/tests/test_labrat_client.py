@@ -12,7 +12,7 @@ import responses
 import time_machine
 from labrat_client.labrat_client import Exposure, LabratClient
 
-TEST_URL = "http://labrat.test"
+TEST_URL = "http://labrat.test/api/v1"
 EXPOSED_AT_DATETIME = datetime(2026, 10, 1, tzinfo=UTC)
 EXPOSURE_DATA: Exposure = Exposure(
     experiment="test-experiment",
