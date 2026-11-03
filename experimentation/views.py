@@ -45,9 +45,9 @@ def record_action(request) -> JsonResponse:
     if not form.is_valid():
         return JsonResponse({"errors": form.errors}, status=HTTPStatus.BAD_REQUEST)
 
-    action = action_service.record(**form.cleaned_data)
+    action_service.record(**form.cleaned_data)
 
-    return JsonResponse(data={"action": action.pk}, status=HTTPStatus.CREATED)
+    return JsonResponse({}, status=HTTPStatus.OK)
 
 
 @require_POST
@@ -73,11 +73,10 @@ def record_exposure(request) -> JsonResponse:
         return JsonResponse({"errors": form.errors}, status=HTTPStatus.BAD_REQUEST)
 
     try:
-        exposure = exposure_service.record(**form.cleaned_data)
-
+        exposure_service.record(**form.cleaned_data)
     except ValidationError as e:
         return JsonResponse(
             data={"errors": e.message_dict}, status=HTTPStatus.BAD_REQUEST
         )
 
-    return JsonResponse(data={"exposure": exposure.pk}, status=HTTPStatus.CREATED)
+    return JsonResponse({}, status=HTTPStatus.OK)

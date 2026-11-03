@@ -34,9 +34,8 @@ class RecordActionViewTest(TestCase):
     def test_record_action_positive(self):
         response = self.post(json.dumps(self.payload))
 
-        self.assertEqual(response.status_code, HTTPStatus.CREATED)
+        self.assertEqual(response.status_code, HTTPStatus.OK)
         action = Action.objects.get()
-        self.assertEqual(response.json(), {"action": action.pk})
         self.assertEqual(action.subject, "11")
         self.assertEqual(action.name, "test_action")
         self.assertEqual(action.triggered_at, self.now)
@@ -80,7 +79,7 @@ class RecordActionViewTest(TestCase):
             json.dumps(self.payload), client=Client(enforce_csrf_checks=True)
         )
 
-        self.assertEqual(response.status_code, HTTPStatus.CREATED)
+        self.assertEqual(response.status_code, HTTPStatus.OK)
 
 
 @time_machine.travel(SETUP_TIME, tick=False)
@@ -109,9 +108,8 @@ class RecordExposureViewTest(TestCase):
     def test_record_exposure_positive(self):
         response = self.post(json.dumps(self.payload))
 
-        self.assertEqual(response.status_code, HTTPStatus.CREATED)
+        self.assertEqual(response.status_code, HTTPStatus.OK)
         exposure = Exposure.objects.get()
-        self.assertEqual(response.json(), {"exposure": exposure.pk})
         self.assertEqual(exposure.experiment, self.experiment)
         self.assertEqual(exposure.subject, "11")
         self.assertEqual(exposure.variant, "treatment")
@@ -158,4 +156,4 @@ class RecordExposureViewTest(TestCase):
             json.dumps(self.payload), client=Client(enforce_csrf_checks=True)
         )
 
-        self.assertEqual(response.status_code, HTTPStatus.CREATED)
+        self.assertEqual(response.status_code, HTTPStatus.OK)
