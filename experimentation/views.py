@@ -1,7 +1,7 @@
 import json
 from http import HTTPStatus
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
@@ -30,12 +30,14 @@ def record_action(request) -> JsonResponse:
         data = json.loads(request.body)
     except ValueError:
         return JsonResponse(
-            data={"error": "Invalid JSON"}, status=HTTPStatus.BAD_REQUEST
+            {"errors": {NON_FIELD_ERRORS: ["Invalid JSON"]}},
+            status=HTTPStatus.BAD_REQUEST,
         )
 
     if not isinstance(data, dict):
         return JsonResponse(
-            data={"error": "Invalid JSON"}, status=HTTPStatus.BAD_REQUEST
+            {"errors": {NON_FIELD_ERRORS: ["Invalid JSON"]}},
+            status=HTTPStatus.BAD_REQUEST,
         )
 
     form = ActionForm(data)
@@ -55,12 +57,14 @@ def record_exposure(request) -> JsonResponse:
         data = json.loads(request.body)
     except ValueError:
         return JsonResponse(
-            data={"error": "Invalid JSON"}, status=HTTPStatus.BAD_REQUEST
+            {"errors": {NON_FIELD_ERRORS: ["Invalid JSON"]}},
+            status=HTTPStatus.BAD_REQUEST,
         )
 
     if not isinstance(data, dict):
         return JsonResponse(
-            data={"error": "Invalid JSON"}, status=HTTPStatus.BAD_REQUEST
+            {"errors": {NON_FIELD_ERRORS: ["Invalid JSON"]}},
+            status=HTTPStatus.BAD_REQUEST,
         )
 
     form = ExposureForm(data)

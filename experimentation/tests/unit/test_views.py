@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 
 import time_machine
+from django.core.exceptions import NON_FIELD_ERRORS
 from django.test import Client
 from django.test.testcases import TestCase
 
@@ -51,7 +52,9 @@ class RecordActionViewTest(TestCase):
                 response = self.post(body)
 
                 self.assertEqual(response.status_code, HTTPStatus.BAD_REQUEST)
-                self.assertEqual(response.json(), {"error": "Invalid JSON"})
+                self.assertEqual(
+                    response.json(), {"errors": {NON_FIELD_ERRORS: ["Invalid JSON"]}}
+                )
 
         self.assertFalse(Action.objects.exists())
 
@@ -124,7 +127,9 @@ class RecordExposureViewTest(TestCase):
                 response = self.post(body)
 
                 self.assertEqual(response.status_code, HTTPStatus.BAD_REQUEST)
-                self.assertEqual(response.json(), {"error": "Invalid JSON"})
+                self.assertEqual(
+                    response.json(), {"errors": {NON_FIELD_ERRORS: ["Invalid JSON"]}}
+                )
 
         self.assertFalse(Exposure.objects.exists())
 
