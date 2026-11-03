@@ -71,8 +71,9 @@ def record_exposure(request) -> JsonResponse:
     try:
         exposure = exposure_service.record(**form.cleaned_data)
 
-        return JsonResponse(data={"exposure": exposure.pk}, status=HTTPStatus.CREATED)
     except ValidationError as e:
         return JsonResponse(
             data={"errors": e.message_dict}, status=HTTPStatus.BAD_REQUEST
         )
+
+    return JsonResponse(data={"exposure": exposure.pk}, status=HTTPStatus.CREATED)
