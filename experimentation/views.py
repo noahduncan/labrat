@@ -6,7 +6,9 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
+from .forms.action_form import ActionForm
 from .forms.exposure_form import ExposureForm
+from .services import action as action_service
 from .services import config
 from .services import exposure as exposure_service
 
@@ -19,6 +21,31 @@ def index(request):
 def config_snapshot(request) -> JsonResponse:
     snapshot = config.snapshot()
     return JsonResponse(snapshot)
+
+
+@require_POST
+@csrf_exempt
+def record_action(request) -> JsonResponse:
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        return JsonResponse(
+            data={"error": "Invalid JSON"}, status=HTTPStatus.BAD_REQUEST
+        )
+
+    if not isinstance(data, dict):
+        return JsonResponse(
+            data={"error": "Invalid JSON"}, status=HTTPStatus.BAD_REQUEST
+        )
+
+    form = ActionForm(data)
+
+    if not form.is_valid():
+        return JsonResponse({"errors": form.errors}, status=HTTPStatus.BAD_REQUEST)
+
+    action = action_service.record(**form.cleaned_data)
+
+    return JsonResponse(data={"action": action.pk}, status=HTTPStatus.CREATED)
 
 
 @require_POST
