@@ -43,7 +43,9 @@ def record_action(request) -> JsonResponse:
     form = ActionForm(data)
 
     if not form.is_valid():
-        return JsonResponse({"errors": form.errors}, status=HTTPStatus.BAD_REQUEST)
+        return JsonResponse(
+            {"errors": form.errors}, status=HTTPStatus.UNPROCESSABLE_ENTITY
+        )
 
     action_service.record(**form.cleaned_data)
 
@@ -70,13 +72,15 @@ def record_exposure(request) -> JsonResponse:
     form = ExposureForm(data)
 
     if not form.is_valid():
-        return JsonResponse({"errors": form.errors}, status=HTTPStatus.BAD_REQUEST)
+        return JsonResponse(
+            {"errors": form.errors}, status=HTTPStatus.UNPROCESSABLE_ENTITY
+        )
 
     try:
         exposure_service.record(**form.cleaned_data)
     except ValidationError as e:
         return JsonResponse(
-            data={"errors": e.message_dict}, status=HTTPStatus.BAD_REQUEST
+            data={"errors": e.message_dict}, status=HTTPStatus.UNPROCESSABLE_ENTITY
         )
 
     return JsonResponse({}, status=HTTPStatus.OK)

@@ -62,7 +62,7 @@ class RecordActionViewTest(TestCase):
             with self.subTest(field):
                 payload = {k: v for k, v in self.payload.items() if k != field}
                 response = self.post(payload)
-                self.assertEqual(response.status_code, HTTPStatus.BAD_REQUEST)
+                self.assertEqual(response.status_code, HTTPStatus.UNPROCESSABLE_ENTITY)
                 self.assertEqual(
                     response.json(),
                     {"errors": {field: ["This field is required."]}},
@@ -134,14 +134,14 @@ class RecordExposureViewTest(TestCase):
     def test_record_exposure_rejects_unknown_experiment(self):
         response = self.post(json.dumps({**self.payload, "experiment": "nope"}))
 
-        self.assertEqual(response.status_code, HTTPStatus.BAD_REQUEST)
+        self.assertEqual(response.status_code, HTTPStatus.UNPROCESSABLE_ENTITY)
         self.assertIn("experiment", response.json()["errors"])
         self.assertFalse(Exposure.objects.exists())
 
     def test_record_exposure_rejects_model_validation_error(self):
         response = self.post(json.dumps({**self.payload, "variant": "control"}))
 
-        self.assertEqual(response.status_code, HTTPStatus.BAD_REQUEST)
+        self.assertEqual(response.status_code, HTTPStatus.UNPROCESSABLE_ENTITY)
         self.assertIn("__all__", response.json()["errors"])
         self.assertFalse(Exposure.objects.exists())
 
