@@ -2,7 +2,6 @@ import logging
 import os
 import queue
 import threading
-import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -15,6 +14,7 @@ from labrat_client.exceptions import (
     LabratConnectionError,
     LabratError,
 )
+from labrat_client.sender import Sender
 from labrat_client.worker import Worker
 
 logger = logging.getLogger(__name__)
@@ -53,29 +53,16 @@ class LabratClient:
         self.config: None | dict[str, dict[str, bool | list[dict[str, Any]]]] = None
         # TODO make exposure data tracking thread safe
         # TODO add TTL to _exposure_pairs to remove memory leak
-        self._exposures: queue.Queue[Exposure] = queue.Queue(maxsize=queue_maxsize)
         self._exposure_pairs: set[tuple[str, str]] = set()
         self._drop_count = 0
 
         self._poller = Worker(self._poll, "labrat-poller")
         self._poll_interval = poll_interval
 
-        self._sender = Worker(self._send_queued, "labrat-sender")
-        self._sender.start()
-
-    def _send_queued(self, stop_event: threading.Event) -> None:
-        while not stop_event.is_set():
-            try:
-                event = self._exposures.get(timeout=0.1)
-            except queue.Empty:
-                continue
-
-            try:
-                self._send_exposure(event)
-            except LabratConnectionError:
-                logger.warning("Could not transmit exposure. Dropping.")
-            except Exception:
-                logger.warning("Unexpected error sending exposure", exc_info=True)
+        self._exposure_sender = Sender(
+            self._send_exposure, queue_maxsize, "labrat-exposure-sender"
+        )
+        self._exposure_sender.start()
 
     def _ensure_started(self):
         self._poller.start(before=lambda: self._refresh(timeout=1))
@@ -147,34 +134,18 @@ class LabratClient:
     def close(self, timeout: float = 2) -> None:
         """
         Stops background polling and exposure sending. Exposures already queued when
-        close() is called will be flushed before stopping the sender thread. Calling
-        close() multiple times is harmless.
+        `close()` is called will be flushed before stopping the sender thread. Calling
+        `close()` multiple times is harmless.
 
         NOTEs:
-            1. Calling is_flag_on() after calling close() will use the cached copy of
+            1. Calling `is_flag_on()` after calling close() will use the cached copy of
                the server config.
-            2. timeout is a soft limit that bounds how long close will wait for the
-               queue to flush. If sending an exposure takes longer than the timeout,
-               this function would also take longer to finish.
+            2. `timeout` is a soft limit that bounds how long close will wait for the
+               workers to stop. If workers take longer than `timeout` (e.g. slow server)
+               then this function may also take longer than `timeout`.
         """
         self._poller.stop()
-
-        sender_close_deadline = time.monotonic() + timeout
-        while (
-            self._sender.is_alive()
-            and self._exposures.qsize() > 0
-            and time.monotonic() < sender_close_deadline
-        ):
-            time.sleep(0.1)
-
-        self._sender.stop()
-
-        if self._exposures.qsize() > 0:
-            logger.warning(
-                "Exposure queue did not flush within %s seconds, dropping %d exposures.",
-                timeout,
-                self._exposures.qsize(),
-            )
+        self._exposure_sender.stop(timeout)
 
     def is_flag_on(self, flag_name: str, user_id: str, default: bool = False) -> bool:
         self._ensure_started()
@@ -203,7 +174,7 @@ class LabratClient:
                 variant=variant,
                 exposed_at=datetime.now(UTC),
             )
-            self._exposures.put_nowait(exposure)
+            self._exposure_sender.enqueue(exposure)
             self._exposure_pairs.add((experiment_slug, subject))
             if self._drop_count > 0:
                 logger.warning(

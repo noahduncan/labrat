@@ -1,16 +1,20 @@
 import json
 import logging
+import queue
+import threading
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 import requests
 import responses
 import time_machine
+from labrat_client.exceptions import LabratConnectionError
 from labrat_client.labrat_client import Exposure, LabratClient
+from labrat_client.sender import Sender
 
 TEST_URL = "http://labrat.test/api/v1"
 EXPOSED_AT_DATETIME = datetime(2026, 10, 1, tzinfo=UTC)
@@ -39,7 +43,9 @@ def make_client():
 
         client = LabratClient(**overrides)
         if not sender:
-            client._sender.stop()
+            # Swap in a mock so tests can assert on what the client hands the sender.
+            client._exposure_sender.stop(timeout=2)
+            client._exposure_sender = Mock(spec=Sender)
         clients.append(client)
         return client
 
@@ -215,8 +221,9 @@ def test_labrat_client_records_exposure_when_active_experiment(make_client):
     }
 
     client.is_flag_on("test", "1")
-    assert client._exposures.qsize() == 1
-    assert client._exposures.get_nowait().experiment == "test_experiment"
+    client._exposure_sender.enqueue.assert_called_once()
+    exposure = client._exposure_sender.enqueue.call_args.args[0]
+    assert exposure.experiment == "test_experiment"
 
 
 def test_labrat_client_does_not_record_exposure_when_no_active_experiment(make_client):
@@ -236,7 +243,7 @@ def test_labrat_client_does_not_record_exposure_when_no_active_experiment(make_c
     }
 
     client.is_flag_on("test", "1")
-    assert client._exposures.qsize() == 0
+    client._exposure_sender.enqueue.assert_not_called()
 
 
 def test_labrat_client_is_flag_on_only_adds_one_exposure_per_experiment_subject_pair(
@@ -271,17 +278,19 @@ def test_labrat_client_is_flag_on_only_adds_one_exposure_per_experiment_subject_
     client.is_flag_on("test", "1")
     client.is_flag_on("test", "1")
     assert len(client._exposure_pairs) == 1
-    assert client._exposures.qsize() == 1
+    assert client._exposure_sender.enqueue.call_count == 1
 
     client.is_flag_on("test2", "1")
     client.is_flag_on("test2", "1")
     assert len(client._exposure_pairs) == 2
-    assert client._exposures.qsize() == 2
+    assert client._exposure_sender.enqueue.call_count == 2
 
 
 def test_labrat_client_queue_overrun_logging(make_client, caplog):
     caplog.set_level(logging.WARNING)
-    client = make_client(sender=False, queue_maxsize=1)
+    client = make_client(sender=False)
+    # Accept one, reject two (queue full), then accept again (queue drained).
+    client._exposure_sender.enqueue.side_effect = [None, queue.Full, queue.Full, None]
     client.config = {
         "test": {
             "enabled": True,
@@ -311,12 +320,10 @@ def test_labrat_client_queue_overrun_logging(make_client, caplog):
     client.is_flag_on("test2", "1")
     client.is_flag_on("test2", "1")
 
-    assert client._exposures.qsize() == 1
+    assert client._exposure_sender.enqueue.call_count == 3
     assert len(client._exposure_pairs) == 1
     assert client._drop_count == 2
     assert caplog.text.count("Exposure queue full, dropping exposure reports.") == 1
-
-    client._exposures.get_nowait()
 
     client.is_flag_on("test2", "1")
     assert client._drop_count == 0
@@ -337,17 +344,14 @@ def test_labrat_client_record_exposure_queues_exposure(make_client):
         variant=EXPOSURE_DATA.variant,
     )
 
-    assert client._exposures.qsize() == 1
-    assert client._exposures.get_nowait() == EXPOSURE_DATA
+    client._exposure_sender.enqueue.assert_called_once_with(EXPOSURE_DATA)
 
 
-def test_labrat_client_sender_posts_queued_exposure(client, caplog):
+def test_labrat_client__send_exposure_posts_exposure(client, caplog):
     caplog.set_level(logging.WARNING)
     responses.post(url=TEST_URL + "/experiment/record-exposure", status=200)
-    client._exposures.put(EXPOSURE_DATA)
 
-    assert wait_until(lambda: responses.calls)
-    client._sender.stop()
+    client._send_exposure(EXPOSURE_DATA)
 
     assert len(responses.calls) == 1
     assert caplog.text == ""
@@ -362,84 +366,42 @@ def test_labrat_client_sender_posts_queued_exposure(client, caplog):
     }
 
 
-def test_labrat_client_record_exposure_connection_error_logs_warning(client, caplog):
-    caplog.set_level(logging.WARNING)
+def test_labrat_client__send_exposure_connection_error_raises(client):
     responses.post(
         url=TEST_URL + "/experiment/record-exposure",
         body=requests.RequestException("Something happened"),
     )
+
+    with pytest.raises(LabratConnectionError):
+        client._send_exposure(EXPOSURE_DATA)
+
+
+def test_labrat_client_record_exposure_is_sent_to_server(client):
+    """
+    End-to-end: record_exposure -> Sender queue -> background thread -> POST.
+    """
+    responses.post(url=TEST_URL + "/experiment/record-exposure", status=200)
+
     client.record_exposure(
         experiment_slug=EXPOSURE_DATA.experiment,
         subject=EXPOSURE_DATA.subject,
         variant=EXPOSURE_DATA.variant,
     )
 
-    wait_until(lambda: "Could not transmit" in caplog.text)
-
-    assert "Could not transmit" in caplog.text
-
-
-def test_labrat_client_record_exposure_exception_logs_warning_and_thread_survives(
-    client, caplog
-):
-    caplog.set_level(logging.WARNING)
-    with patch.object(
-        client, "_send_exposure", side_effect=[Exception("boom"), None]
-    ) as cm:
-        client.record_exposure(
-            experiment_slug=EXPOSURE_DATA.experiment,
-            subject=EXPOSURE_DATA.subject,
-            variant=EXPOSURE_DATA.variant,
-        )
-        client.record_exposure(
-            experiment_slug=EXPOSURE_DATA.experiment + "1",
-            subject=EXPOSURE_DATA.subject,
-            variant=EXPOSURE_DATA.variant,
-        )
-
-        # Two calls means that the thread survived the first failure.
-        assert wait_until(lambda: cm.call_count == 2)
-        assert caplog.text.count("Unexpected error sending exposure") == 1
+    assert wait_until(lambda: len(responses.calls) == 1)
 
 
 def test_labrat_client_close_ends_all_background_threads(client):
+    def running_thread_names() -> set[str]:
+        return {t.name for t in threading.enumerate()}
+
+    background_threads = {"labrat-poller", "labrat-exposure-sender"}
+
     with patch.object(client, "fetch_config", return_value={}):
         client._ensure_started()
 
-        assert client._poller.is_alive()
-        assert client._sender.is_alive()
+        assert background_threads <= running_thread_names()
 
         client.close()
 
-        assert not client._poller.is_alive()
-        assert not client._sender.is_alive()
-
-
-def test_labrat_client_close_warns_if_queue_times_out(client, caplog):
-    caplog.set_level(logging.WARNING)
-    timeout = 0.1
-
-    with patch.object(client, "_send_exposure", side_effect=lambda _: time.sleep(0.2)):
-        client._exposures.put(EXPOSURE_DATA)
-        client._exposures.put(EXPOSURE_DATA)
-
-        assert wait_until(lambda: client._exposures.qsize() == 1)
-
-        client.close(timeout)
-
-        assert (
-            f"Exposure queue did not flush within {timeout} seconds, dropping 1 exposures."
-            in caplog.text
-        )
-
-
-def test_labrat_client_close_flushes_remaining_queued_exposures(client):
-    responses.post(url=TEST_URL + "/experiment/record-exposure", status=200)
-
-    client._exposures.put(EXPOSURE_DATA)
-    client._exposures.put(EXPOSURE_DATA)
-
-    client.close()
-
-    assert len(responses.calls) == 2
-    assert client._exposures.qsize() == 0
+        assert background_threads.isdisjoint(running_thread_names())
