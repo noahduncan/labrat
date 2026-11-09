@@ -12,7 +12,6 @@ import pytest
 import requests
 import responses
 import time_machine
-from labrat_client.exceptions import LabratConnectionError
 from labrat_client.labrat_client import Exposure, LabratClient
 from labrat_client.sender import Sender
 
@@ -366,14 +365,28 @@ def test_labrat_client__send_exposure_posts_exposure(client, caplog):
     }
 
 
-def test_labrat_client__send_exposure_connection_error_raises(client):
+def test_labrat_client__send_exposure_connection_error_logs_warning(client, caplog):
+    caplog.set_level(logging.WARNING)
     responses.post(
         url=TEST_URL + "/experiment/record-exposure",
         body=requests.RequestException("Something happened"),
     )
 
-    with pytest.raises(LabratConnectionError):
-        client._send_exposure(EXPOSURE_DATA)
+    client._send_exposure(EXPOSURE_DATA)
+
+    assert "Could not transmit exposure" in caplog.text
+
+
+def test_labrat_client__send_exposure_unexpected_error_logs_warning(client, caplog):
+    caplog.set_level(logging.WARNING)
+    responses.post(
+        url=TEST_URL + "/experiment/record-exposure",
+        body=Exception("boom"),
+    )
+
+    client._send_exposure(EXPOSURE_DATA)
+
+    assert "Unexpected error sending exposure" in caplog.text
 
 
 def test_labrat_client_record_exposure_is_sent_to_server(client):

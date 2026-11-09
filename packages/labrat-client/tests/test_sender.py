@@ -4,7 +4,6 @@ import threading
 import time
 
 import pytest
-from labrat_client.exceptions import LabratConnectionError
 from labrat_client.sender import Sender
 
 
@@ -53,23 +52,11 @@ def test_sender_survives_send_function_exception(make_sender, caplog):
 
     # Item 2 being sent means the thread survived item 1's exception.
     assert calls == ["item 1", "item 2"]
-    assert caplog.text.count("Unexpected error sending exposure") == 1
+    assert (
+        caplog.text.count("Unhandled exception raised sending item from test-sender")
+        == 1
+    )
     assert "boom" in caplog.text
-
-
-def test_sender_connection_error_logs_warning(make_sender, caplog):
-    caplog.set_level(logging.WARNING)
-
-    def send_fn(_):
-        raise LabratConnectionError("Something happened")
-
-    sender = make_sender(send_fn)
-    sender.start()
-
-    sender.enqueue("item 1")
-    sender.stop(timeout=2)
-
-    assert "Could not transmit exposure. Dropping." in caplog.text
 
 
 def test_sender_enqueue_raises_when_full(make_sender):

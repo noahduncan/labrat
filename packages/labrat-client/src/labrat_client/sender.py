@@ -4,7 +4,6 @@ import threading
 import time
 from collections.abc import Callable
 
-from labrat_client.exceptions import LabratConnectionError
 from labrat_client.worker import Worker
 
 logger = logging.getLogger(__name__)
@@ -12,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 class Sender:
     def __init__(self, send_function: Callable, maxsize: int, name: str) -> None:
+        self.name = name
         self._queue = queue.Queue(maxsize=maxsize)
         self._send_function = send_function
         self._worker = Worker(self._send_queued, name)
@@ -25,10 +25,10 @@ class Sender:
 
             try:
                 self._send_function(item)
-            except LabratConnectionError:
-                logger.warning("Could not transmit exposure. Dropping.")
             except Exception:
-                logger.warning("Unexpected error sending exposure", exc_info=True)
+                logger.exception(
+                    "Unhandled exception raised sending item from %s", self.name
+                )
 
     def enqueue(self, item) -> None:
         self._queue.put_nowait(item)

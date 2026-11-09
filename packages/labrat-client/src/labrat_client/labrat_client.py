@@ -98,8 +98,11 @@ class LabratClient:
                 timeout=timeout,
             )
             r.raise_for_status()
-        except requests.RequestException as e:
-            raise LabratConnectionError(f"Could not send exposure: {e}") from e
+        except requests.RequestException:
+            # TODO The actual exception is lost here. Enhance by adding error to warning?
+            logger.warning("Could not transmit exposure. Dropping.")
+        except Exception:
+            logger.warning("Unexpected error sending exposure", exc_info=True)
 
     @staticmethod
     def parse_config(config: dict) -> dict:
