@@ -16,11 +16,11 @@ EXPECTED_VARIANTS = [
 ]
 
 
-@mark.parametrize(("experiment_slug", "user_id", "expected_bucket"), EXPECTED_BUCKETS)
+@mark.parametrize(("experiment_slug", "subject", "expected_bucket"), EXPECTED_BUCKETS)
 def test_bucket_for_is_deterministic(
-    experiment_slug: str, user_id: str, expected_bucket: int
+    experiment_slug: str, subject: str, expected_bucket: int
 ):
-    assert bucket_for(experiment_slug, user_id) == expected_bucket
+    assert bucket_for(experiment_slug, subject) == expected_bucket
 
 
 def test_bucket_for_changes_bucket_for_different_inputs():
@@ -34,6 +34,6 @@ def test_bucket_for_result_is_in_range():
     assert all(0 <= bucket_for("experiment_slug", str(u)) < 100 for u in range(10_000))
 
 
-@mark.parametrize(("experiment_slug", "user_id", "expected_variant"), EXPECTED_VARIANTS)
-def test_variant_for(experiment_slug: str, user_id: str, expected_variant: str):
-    assert variant_for(experiment_slug, 50, user_id) == expected_variant
+@mark.parametrize(("experiment_slug", "subject", "expected_variant"), EXPECTED_VARIANTS)
+def test_variant_for(experiment_slug: str, subject: str, expected_variant: str):
+    assert variant_for(experiment_slug, 50, subject) == expected_variant

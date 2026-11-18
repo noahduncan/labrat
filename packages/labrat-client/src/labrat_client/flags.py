@@ -17,7 +17,7 @@ class FlagResult:
 def evaluate(
     flags: dict,
     flag_name: str,
-    user_id: str,
+    subject: str,
     now: datetime | None = None,
     default: bool = False,
 ) -> FlagResult:
@@ -35,7 +35,7 @@ def evaluate(
     for experiment in experiments:
         if experiment["start_at"] <= now < experiment["end_at"]:
             variant = bucketing.variant_for(
-                experiment["slug"], experiment["control"], user_id
+                experiment["slug"], experiment["control"], subject
             )
             enabled = flag["enabled"] if variant == "control" else not flag["enabled"]
             return FlagResult(enabled, experiment["slug"], variant)

@@ -188,14 +188,14 @@ class LabratClient:
         self._exposure_sender.stop(timeout)
         self._action_sender.stop(timeout)
 
-    def is_flag_on(self, flag_name: str, user_id: str, default: bool = False) -> bool:
-        """Returns whether a flag is on for a given user id.
+    def is_flag_on(self, flag_name: str, subject: str, default: bool = False) -> bool:
+        """Returns whether a flag is on for a given subject.
 
         If an experiment is active for the given flag, an exposure will be automatically recorded.
 
         Args:
             flag_name: Name of the flag to check.
-            user_id: Stable user identifier used for bucketing.
+            subject: Stable subject identifier used for bucketing.
             default: Returned until the first config fetch succeeds or if a flag hasn't
                 been configured on the server.
 
@@ -215,12 +215,12 @@ class LabratClient:
         if not self.config:
             return default
 
-        flag_result = flags.evaluate(self.config, flag_name, user_id, default=default)
+        flag_result = flags.evaluate(self.config, flag_name, subject, default=default)
 
         if flag_result.experiment_slug is not None and flag_result.variant is not None:
             self._enqueue_exposure(
                 experiment_slug=flag_result.experiment_slug,
-                subject=user_id,
+                subject=subject,
                 variant=flag_result.variant,
             )
         return flag_result.enabled
