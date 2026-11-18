@@ -86,7 +86,7 @@ def test_labrat_client_init_falls_back_to_env_var(make_client, monkeypatch):
 def test_labrat_client_fetch_config_not_called_for_every_operation(client):
     with patch.object(
         client,
-        "fetch_config",
+        "_fetch_config",
         return_value={"test": {"enabled": True, "experiments": []}},
     ) as fake:
         client.is_flag_on("test", "1")
@@ -161,7 +161,7 @@ def test_labrat_client_is_flag_on_returns_default_on_fetch_config_failure(client
 
 
 def test_labrat_client_parse_config_converts_isodatetime_stamps(client):
-    flags = client.parse_config(
+    flags = client._parse_config(
         {
             "flags": {
                 "test": {
@@ -192,7 +192,7 @@ def test_labrat_client_fetch_config_called_in_thread(make_client):
     """
     client = make_client(poll_interval=0.01)
 
-    with patch.object(client, "fetch_config", return_value={}) as mock_fetch:
+    with patch.object(client, "_fetch_config", return_value={}) as mock_fetch:
         try:
             client.is_flag_on("test", "1")
             # The poller may fetch more than once before it stops, so this is a minimum.
@@ -410,7 +410,7 @@ def test_labrat_client_close_ends_all_background_threads(client):
 
     background_threads = {"labrat-poller", "labrat-exposure-sender"}
 
-    with patch.object(client, "fetch_config", return_value={}):
+    with patch.object(client, "_fetch_config", return_value={}):
         client._ensure_started()
 
         assert background_threads <= running_thread_names()

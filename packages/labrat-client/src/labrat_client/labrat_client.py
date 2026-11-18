@@ -73,7 +73,7 @@ class LabratClient:
 
     def _refresh(self, timeout: float = 5):
         try:
-            self.config = self.fetch_config(timeout)
+            self.config = self._fetch_config(timeout)
         except LabratError as e:
             logger.warning("Config refresh failed: %s", e)
         except Exception:
@@ -105,7 +105,7 @@ class LabratClient:
             logger.warning("Unexpected error sending exposure", exc_info=True)
 
     @staticmethod
-    def parse_config(config: dict) -> dict:
+    def _parse_config(config: dict) -> dict:
         config_flags = config["flags"]
 
         for flag in config_flags.values():
@@ -115,7 +115,7 @@ class LabratClient:
 
         return config_flags
 
-    def fetch_config(self, timeout: float = 5) -> dict:
+    def _fetch_config(self, timeout: float = 5) -> dict:
         """
         Fetch the feature flag and experiment configuration from the server.
         Raises on failed request.
@@ -130,7 +130,7 @@ class LabratClient:
             raise LabratConnectionError(f"Could not fetch config: {e}") from e
 
         try:
-            return self.parse_config(data)
+            return self._parse_config(data)
         except (KeyError, ValueError, TypeError) as e:
             raise LabratConfigError(f"Could not parse config: {e}") from e
 
