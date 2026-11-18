@@ -12,11 +12,16 @@ import pytest
 import requests
 import responses
 import time_machine
-from labrat_client.labrat_client import Exposure, LabratClient
+from labrat_client.labrat_client import Action, Exposure, LabratClient
 from labrat_client.sender import Sender
 
 TEST_URL = "http://labrat.test/api/v1"
 EXPOSED_AT_DATETIME = datetime(2026, 10, 1, tzinfo=UTC)
+ACTION_DATA: Action = Action(
+    name="test-action",
+    subject="test_subject",
+    triggered_at=EXPOSED_AT_DATETIME,
+)
 EXPOSURE_DATA: Exposure = Exposure(
     experiment="test-experiment",
     subject="test_subject",
@@ -42,9 +47,11 @@ def make_client():
 
         client = LabratClient(**overrides)
         if not sender:
-            # Swap in a mock so tests can assert on what the client hands the sender.
+            # Swap in mocks so tests can assert on what the client hands the senders.
             client._exposure_sender.stop(timeout=2)
             client._exposure_sender = Mock(spec=Sender)
+            client._action_sender.stop(timeout=2)
+            client._action_sender = Mock(spec=Sender)
         clients.append(client)
         return client
 
@@ -321,11 +328,11 @@ def test_labrat_client_queue_overrun_logging(make_client, caplog):
 
     assert client._exposure_sender.enqueue.call_count == 3
     assert len(client._exposure_pairs) == 1
-    assert client._drop_count == 2
+    assert client._exposure_drop_count == 2
     assert caplog.text.count("Exposure queue full, dropping exposure reports.") == 1
 
     client.is_flag_on("test2", "1")
-    assert client._drop_count == 0
+    assert client._exposure_drop_count == 0
     assert len(client._exposure_pairs) == 2
     assert ("test_experiment2", "1") in client._exposure_pairs
     assert (
@@ -344,6 +351,113 @@ def test_labrat_client_record_exposure_queues_exposure(make_client):
     )
 
     client._exposure_sender.enqueue.assert_called_once_with(EXPOSURE_DATA)
+
+
+@time_machine.travel(EXPOSED_AT_DATETIME)
+def test_labrat_client_enqueue_action_queues_action(make_client):
+    client = make_client(sender=False)
+
+    client.enqueue_action(action_name=ACTION_DATA.name, subject=ACTION_DATA.subject)
+
+    client._action_sender.enqueue.assert_called_once_with(ACTION_DATA)
+
+
+def test_labrat_client_enqueue_action_does_not_deduplicate(make_client):
+    """
+    Unlike exposures, every action is sent: analysis needs the actions that happen
+    after exposure, and count metrics need every instance.
+    """
+    client = make_client(sender=False)
+
+    client.enqueue_action(action_name=ACTION_DATA.name, subject=ACTION_DATA.subject)
+    client.enqueue_action(action_name=ACTION_DATA.name, subject=ACTION_DATA.subject)
+
+    assert client._action_sender.enqueue.call_count == 2
+
+
+def test_labrat_client_action_queue_overrun_logging(make_client, caplog):
+    caplog.set_level(logging.WARNING)
+    client = make_client(sender=False)
+    # Accept one, reject two (queue full), then accept again (queue drained).
+    client._action_sender.enqueue.side_effect = [None, queue.Full, queue.Full, None]
+
+    for _ in range(3):
+        client.enqueue_action(action_name="test-action", subject="1")
+
+    assert client._action_sender.enqueue.call_count == 3
+    assert caplog.text.count("Action queue full, dropping action reports.") == 1
+
+    client.enqueue_action(action_name="test-action", subject="1")
+
+    assert (
+        caplog.text.count("Action queue healthy again, discarded 2 action reports.")
+        == 1
+    )
+
+
+def test_labrat_client_action_and_exposure_drop_counts_are_independent(
+    make_client, caplog
+):
+    """
+    A full action queue must not be reported as dropped exposures (or vice versa).
+    """
+    caplog.set_level(logging.WARNING)
+    client = make_client(sender=False)
+    client._action_sender.enqueue.side_effect = [queue.Full, None]
+    client._exposure_sender.enqueue.side_effect = [None]
+
+    client.enqueue_action(action_name="test-action", subject="1")
+    client._enqueue_exposure(
+        experiment_slug=EXPOSURE_DATA.experiment,
+        subject=EXPOSURE_DATA.subject,
+        variant=EXPOSURE_DATA.variant,
+    )
+    client.enqueue_action(action_name="test-action", subject="1")
+
+    assert "Exposure queue healthy again" not in caplog.text
+    assert "Action queue healthy again, discarded 1 action reports." in caplog.text
+
+
+def test_labrat_client__send_action_posts_action(client, caplog):
+    caplog.set_level(logging.WARNING)
+    responses.post(url=TEST_URL + "/record-action", status=200)
+
+    client._send_action(ACTION_DATA)
+
+    assert len(responses.calls) == 1
+    assert caplog.text == ""
+
+    request_body = responses.calls[0].request.body
+    assert request_body is not None
+    assert json.loads(request_body) == {
+        "name": ACTION_DATA.name,
+        "subject": ACTION_DATA.subject,
+        "triggered_at": ACTION_DATA.triggered_at.isoformat(),
+    }
+
+
+def test_labrat_client__send_action_connection_error_logs_warning(client, caplog):
+    caplog.set_level(logging.WARNING)
+    responses.post(
+        url=TEST_URL + "/record-action",
+        body=requests.RequestException("Something happened"),
+    )
+
+    client._send_action(ACTION_DATA)
+
+    assert "Could not transmit action" in caplog.text
+
+
+def test_labrat_client__send_action_unexpected_error_logs_warning(client, caplog):
+    caplog.set_level(logging.WARNING)
+    responses.post(
+        url=TEST_URL + "/record-action",
+        body=Exception("boom"),
+    )
+
+    client._send_action(ACTION_DATA)
+
+    assert "Unexpected error sending action" in caplog.text
 
 
 def test_labrat_client__send_exposure_posts_exposure(client, caplog):
@@ -404,11 +518,36 @@ def test_labrat_client_record_exposure_is_sent_to_server(client):
     assert wait_until(lambda: len(responses.calls) == 1)
 
 
+def test_labrat_client_enqueue_action_is_sent_to_server(client):
+    """
+    End-to-end: enqueue_action -> Sender queue -> background thread -> POST.
+    """
+    responses.post(url=TEST_URL + "/record-action", status=200)
+
+    client.enqueue_action(action_name=ACTION_DATA.name, subject=ACTION_DATA.subject)
+
+    assert wait_until(lambda: len(responses.calls) == 1)
+
+
+def test_labrat_client_close_flushes_queued_actions(client):
+    responses.post(url=TEST_URL + "/record-action", status=200)
+
+    client.enqueue_action(action_name="test-action", subject="1")
+    client.enqueue_action(action_name="test-action", subject="2")
+    client.close()
+
+    assert len(responses.calls) == 2
+
+
 def test_labrat_client_close_ends_all_background_threads(client):
     def running_thread_names() -> set[str]:
         return {t.name for t in threading.enumerate()}
 
-    background_threads = {"labrat-poller", "labrat-exposure-sender"}
+    background_threads = {
+        "labrat-poller",
+        "labrat-exposure-sender",
+        "labrat-action-sender",
+    }
 
     with patch.object(client, "_fetch_config", return_value={}):
         client._ensure_started()

@@ -21,6 +21,17 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
+class Action:
+    """
+    Required fields to send an action
+    """
+
+    name: str
+    subject: str
+    triggered_at: datetime
+
+
+@dataclass(frozen=True, kw_only=True)
 class Exposure:
     """
     Required fields to send an exposure
@@ -54,7 +65,7 @@ class LabratClient:
         # TODO make exposure data tracking thread safe
         # TODO add TTL to _exposure_pairs to remove memory leak
         self._exposure_pairs: set[tuple[str, str]] = set()
-        self._drop_count = 0
+        self._exposure_drop_count = 0
 
         self._poller = Worker(self._poll, "labrat-poller")
         self._poll_interval = poll_interval
@@ -63,6 +74,12 @@ class LabratClient:
             self._send_exposure, queue_maxsize, "labrat-exposure-sender"
         )
         self._exposure_sender.start()
+
+        self._action_drop_count = 0
+        self._action_sender = Sender(
+            self._send_action, queue_maxsize, "labrat-action-sender"
+        )
+        self._action_sender.start()
 
     def _ensure_started(self):
         self._poller.start(before=lambda: self._refresh(timeout=1))
@@ -78,6 +95,27 @@ class LabratClient:
             logger.warning("Config refresh failed: %s", e)
         except Exception:
             logger.warning("Unexpected error during config refresh", exc_info=True)
+
+    def _send_action(self, event: Action, *, timeout: float = 5) -> None:
+        payload = {
+            "name": event.name,
+            "subject": event.subject,
+            "triggered_at": event.triggered_at.isoformat(),
+        }
+
+        try:
+            # TODO add retry / backoff
+            r = requests.post(
+                self.base_url + "/record-action",
+                json=payload,
+                timeout=timeout,
+            )
+            r.raise_for_status()
+        except requests.RequestException:
+            # TODO The actual exception is lost here. Enhance by adding error to warning?
+            logger.warning("Could not transmit action. Dropping.")
+        except Exception:
+            logger.warning("Unexpected error sending action", exc_info=True)
 
     def _send_exposure(self, event: Exposure, *, timeout: float = 5) -> None:
         payload = {
@@ -134,8 +172,8 @@ class LabratClient:
     def close(self, timeout: float = 2) -> None:
         """Stops background polling and exposure sending.
 
-        Exposures already queued when `close()` is called will be flushed before stopping the
-        sender thread. Calling `close()` multiple times is harmless.
+        Exposures and actions already queued when `close()` is called will be flushed
+        before stopping the sender thread. Calling `close()` multiple times is harmless.
 
         Args:
             timeout: A soft limit that bounds how long close will wait for the
@@ -148,6 +186,7 @@ class LabratClient:
         """
         self._poller.stop()
         self._exposure_sender.stop(timeout)
+        self._action_sender.stop(timeout)
 
     def is_flag_on(self, flag_name: str, user_id: str, default: bool = False) -> bool:
         """Returns whether a flag is on for a given user id.
@@ -186,6 +225,31 @@ class LabratClient:
             )
         return flag_result.enabled
 
+    def enqueue_action(self, *, action_name: str, subject: str):
+        """Queues an action to be sent in the background.
+
+        Args:
+            action_name: Name of the action to send.
+            subject: Subject performing the action.
+        """
+        try:
+            action = Action(
+                name=action_name,
+                subject=subject,
+                triggered_at=datetime.now(UTC),
+            )
+            self._action_sender.enqueue(action)
+            if self._action_drop_count > 0:
+                logger.warning(
+                    "Action queue healthy again, discarded %d action reports.",
+                    self._action_drop_count,
+                )
+                self._action_drop_count = 0
+        except queue.Full:
+            if self._action_drop_count == 0:
+                logger.warning("Action queue full, dropping action reports.")
+            self._action_drop_count += 1
+
     def _enqueue_exposure(self, *, experiment_slug: str, subject: str, variant: str):
         if (experiment_slug, subject) in self._exposure_pairs:
             return
@@ -199,13 +263,13 @@ class LabratClient:
             )
             self._exposure_sender.enqueue(exposure)
             self._exposure_pairs.add((experiment_slug, subject))
-            if self._drop_count > 0:
+            if self._exposure_drop_count > 0:
                 logger.warning(
                     "Exposure queue healthy again, discarded %d exposure reports.",
-                    self._drop_count,
+                    self._exposure_drop_count,
                 )
-                self._drop_count = 0
+                self._exposure_drop_count = 0
         except queue.Full:
-            if self._drop_count == 0:
+            if self._exposure_drop_count == 0:
                 logger.warning("Exposure queue full, dropping exposure reports.")
-            self._drop_count += 1
+            self._exposure_drop_count += 1

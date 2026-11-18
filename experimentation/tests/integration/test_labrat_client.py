@@ -5,7 +5,18 @@ import time_machine
 from django.utils import timezone
 from labrat_client import LabratClient
 
-from experimentation.models import Experiment, Exposure, FeatureFlag
+from experimentation.models import Action, Experiment, Exposure, FeatureFlag
+
+
+@pytest.mark.django_db(transaction=True)
+def test_client_records_action_end_to_end(live_server):
+    client = LabratClient(base_url=live_server.url + "/experimentation/api/v1")
+    try:
+        client.enqueue_action(action_name="purchase", subject="user-1")
+    finally:
+        client.close()
+
+    assert Action.objects.filter(subject="user-1").exists()
 
 
 @pytest.mark.django_db(transaction=True)
