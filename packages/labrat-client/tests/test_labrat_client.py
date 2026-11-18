@@ -337,7 +337,7 @@ def test_labrat_client_queue_overrun_logging(make_client, caplog):
 @time_machine.travel(EXPOSED_AT_DATETIME)
 def test_labrat_client_record_exposure_queues_exposure(make_client):
     client = make_client(sender=False)
-    client.record_exposure(
+    client._enqueue_exposure(
         experiment_slug=EXPOSURE_DATA.experiment,
         subject=EXPOSURE_DATA.subject,
         variant=EXPOSURE_DATA.variant,
@@ -395,7 +395,7 @@ def test_labrat_client_record_exposure_is_sent_to_server(client):
     """
     responses.post(url=TEST_URL + "/experiment/record-exposure", status=200)
 
-    client.record_exposure(
+    client._enqueue_exposure(
         experiment_slug=EXPOSURE_DATA.experiment,
         subject=EXPOSURE_DATA.subject,
         variant=EXPOSURE_DATA.variant,

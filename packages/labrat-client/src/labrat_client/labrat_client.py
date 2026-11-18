@@ -159,14 +159,17 @@ class LabratClient:
         flag_result = flags.evaluate(self.config, flag_name, user_id, default=default)
 
         if flag_result.experiment_slug is not None and flag_result.variant is not None:
-            self.record_exposure(
+            self._enqueue_exposure(
                 experiment_slug=flag_result.experiment_slug,
                 subject=user_id,
                 variant=flag_result.variant,
             )
         return flag_result.enabled
 
-    def record_exposure(self, *, experiment_slug: str, subject: str, variant: str):
+    def _enqueue_exposure(self, *, experiment_slug: str, subject: str, variant: str):
+        """
+        Enqueue an exposure to be sent by a background process. If a queue fills up, warnings will be logged.
+        """
         if (experiment_slug, subject) in self._exposure_pairs:
             return
 
