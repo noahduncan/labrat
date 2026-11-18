@@ -10,6 +10,15 @@ logger = logging.getLogger(__name__)
 
 
 class Sender:
+    """A helper class that calls a function for each enqueued item.
+
+    Args:
+        send_function: A function to call on each queued item to send it externally.
+            Exceptions raised will be logged and swallowed.
+        maxsize: The maximum size of the queue.
+        name: The name of the Sender.
+    """
+
     def __init__(self, send_function: Callable, maxsize: int, name: str) -> None:
         self.name = name
         self._queue = queue.Queue(maxsize=maxsize)
@@ -31,12 +40,28 @@ class Sender:
                 )
 
     def enqueue(self, item) -> None:
+        """Enqueues an item to the queue.
+
+        Args:
+            item: The item to enqueue.
+
+        Raises:
+            queue.Full: If the queue is full.
+        """
         self._queue.put_nowait(item)
 
     def start(self) -> None:
+        """Starts the sender (thread safe)."""
         self._worker.start()
 
-    def stop(self, timeout) -> None:
+    def stop(self, timeout: float) -> None:
+        """Stops the sender, waiting for `timeout` (s) for the queue to drain.
+
+        Args:
+            timeout: A soft timeout in seconds to wait for the queue to drain.
+                If timeout expires before the queue has drained, unsent items
+                will be dropped, and a warning will be created.
+        """
         close_deadline = time.monotonic() + timeout
         while (
             self._worker.is_alive()

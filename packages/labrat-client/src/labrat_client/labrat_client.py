@@ -80,9 +80,6 @@ class LabratClient:
             logger.warning("Unexpected error during config refresh", exc_info=True)
 
     def _send_exposure(self, event: Exposure, *, timeout: float = 5) -> None:
-        """
-        Send an exposure report to the server.
-        """
         payload = {
             "experiment": event.experiment,
             "subject": event.subject,
@@ -116,12 +113,12 @@ class LabratClient:
         return config_flags
 
     def _fetch_config(self, timeout: float = 5) -> dict:
-        """
-        Fetch the feature flag and experiment configuration from the server.
-        Raises on failed request.
+        """Fetch the feature flag and experiment configuration from the server.
 
-        TODO At scale: pub/sub rather than polled.
+        Args:
+            timeout: Soft limit for how long to wait for server, actual time may be longer.
         """
+        # TODO At scale: pub/sub rather than polled.
         try:
             r = requests.get(self.base_url + "/config", timeout=timeout)
             r.raise_for_status()
@@ -135,22 +132,45 @@ class LabratClient:
             raise LabratConfigError(f"Could not parse config: {e}") from e
 
     def close(self, timeout: float = 2) -> None:
-        """
-        Stops background polling and exposure sending. Exposures already queued when
-        `close()` is called will be flushed before stopping the sender thread. Calling
-        `close()` multiple times is harmless.
+        """Stops background polling and exposure sending.
 
-        NOTEs:
-            1. Calling `is_flag_on()` after calling close() will use the cached copy of
-               the server config.
-            2. `timeout` is a soft limit that bounds how long close will wait for the
-               workers to stop. If workers take longer than `timeout` (e.g. slow server)
-               then this function may also take longer than `timeout`.
+        Exposures already queued when `close()` is called will be flushed before stopping the
+        sender thread. Calling `close()` multiple times is harmless.
+
+        Args:
+            timeout: A soft limit that bounds how long close will wait for the
+                workers to stop. If workers take longer than `timeout` (e.g. slow server)
+                then this function may also take longer than `timeout`.
+
+        Note:
+            Calling `is_flag_on()` after calling close() will use the cached copy of
+            the server config.
         """
         self._poller.stop()
         self._exposure_sender.stop(timeout)
 
     def is_flag_on(self, flag_name: str, user_id: str, default: bool = False) -> bool:
+        """Returns whether a flag is on for a given user id.
+
+        If an experiment is active for the given flag, an exposure will be automatically recorded.
+
+        Args:
+            flag_name: Name of the flag to check.
+            user_id: Stable user identifier used for bucketing.
+            default: Returned until the first config fetch succeeds or if a flag hasn't
+                been configured on the server.
+
+        Returns:
+            True if the feature should be enabled.
+
+        Warns:
+            LabratWarning: If the flag is not configured on the server.
+
+        Note:
+            On first call, fetching the configuration will block execution up to ~1
+            second. Subsequent calls will use the cached config (which is updated
+            periodically by a background polling thread).
+        """
         self._ensure_started()
         # In case we haven't successfully connected to the server, return the default.
         if not self.config:
@@ -167,9 +187,6 @@ class LabratClient:
         return flag_result.enabled
 
     def _enqueue_exposure(self, *, experiment_slug: str, subject: str, variant: str):
-        """
-        Enqueue an exposure to be sent by a background process. If a queue fills up, warnings will be logged.
-        """
         if (experiment_slug, subject) in self._exposure_pairs:
             return
 
